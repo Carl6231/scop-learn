@@ -198,5 +198,7 @@ jobs:
         run: |
           python3 -m http.server 4173 --directory _site >/tmp/scop-learn-quality-server.log 2>&1 &
           sleep 1
+      - name: Install matching Chrome driver
+        run: npx --yes browser-driver-manager@latest install chrome
       - name: Run axe accessibility audit
         run: npx --yes @axe-core/cli@4.12.1 -q --no-reporter http://127.0.0.1:4173/ http://127.0.0.1:4173/zh/
