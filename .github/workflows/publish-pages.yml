@@ -54,9 +54,8 @@ jobs:
           assert "SITE_COMMIT_PLACEHOLDER" not in text
           assert "SITE_BUILD_TIME_PLACEHOLDER" not in text
           assert commit in text
-          assert re.search(r"build (?:<strong>)?20\\d\\d-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\dZ(?:</strong>)?", text)
+          assert re.search(r"build (?:<strong>)?20\d\d-\d\d-\d\dT\d\d:\d\d:\d\dZ(?:</strong>)?", text)
           print(f"Build identity verified for {commit}")
-          PY
           PY
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
