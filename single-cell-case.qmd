@@ -1,0 +1,71 @@
+---
+title: "Complete case: single-cell"
+---
+
+<span class="version-chip">Executed: SCOP 0.8.9 · R 4.5.1 · synthetic input</span>
+
+## Biological rationale
+
+We use a small synthetic count matrix with two declared biological states. The purpose is to demonstrate the workflow seams and the evidence record, not to mimic a patient cohort or establish a biological discovery.
+
+## Input contract
+
+- 120 genes × 80 cells.
+- One RNA assay and two declared groups.
+- Synthetic counts with state-associated marker signal.
+- No patient, clinical, or treatment interpretation.
+
+## Workflow
+
+```r
+library(Seurat)
+library(scop)
+
+srt <- CreateSeuratObject(counts, project = "scop-learn-single-cell")
+srt$group <- group
+srt <- RunCellQC(
+  srt,
+  qc_metrics = c("umi", "gene"),
+  UMI_threshold = 0,
+  gene_threshold = 0,
+  verbose = FALSE
+)
+srt <- NormalizeData(srt, verbose = FALSE)
+srt <- FindVariableFeatures(srt, nfeatures = 60, verbose = FALSE)
+srt <- ScaleData(srt, features = VariableFeatures(srt), verbose = FALSE)
+srt <- RunPCA(srt, features = VariableFeatures(srt), npcs = 12, verbose = FALSE)
+srt <- FindNeighbors(srt, dims = 1:8, verbose = FALSE)
+srt <- FindClusters(srt, resolution = 0.4, verbose = FALSE)
+srt <- RunUMAP(srt, dims = 1:8, verbose = FALSE)
+estimated_dims <- RunDimsEstimate(
+  srt,
+  reduction = "pca",
+  reduction_method = "scree",
+  verbose = FALSE
+)
+```
+
+The complete executed script is [available in the repository](https://github.com/Carl6231/scop-learn/blob/main/scripts/single-cell-case.R). The script writes an evidence record and the figure shown below.
+
+![UMAP of the executed synthetic single-cell case, colored by declared state.](assets/figures/single-cell-overview.png){fig-alt="UMAP showing two declared synthetic states" fig-cap="The plot is a workflow checkpoint, not a biological discovery. The input and output identities are recorded in the evidence manifest."}
+
+## Expected insights
+
+- The object retains 80 cells and 120 genes after the deliberately permissive QC checkpoint.
+- The declared group signal remains visible in the low-dimensional view.
+- The SCOP dimension estimator returns a suggested range; it does not replace inspecting the scree behavior or choosing dimensions for the study.
+- The evidence manifest records the exact package and runtime identity used to create the plot.
+
+## Interpretation boundary
+
+The two colors are labels deliberately inserted into a synthetic matrix. They are not discovered cell types, treatment effects, or evidence about a patient population. The case demonstrates how to build and inspect a workflow, not how to make a claim from arbitrary clusters.
+
+## Review checklist
+
+- Check the QC thresholds and retained-cell count.
+- Check which assay and features feed PCA.
+- Check the dimensions used for neighbors and UMAP.
+- Record whether cluster identities agree with declared or external evidence.
+- Preserve the evidence manifest before changing the workflow.
+
+[Evidence manifest](evidence/single-cell-case.json) · [Reproducibility policy](reproducibility.qmd)

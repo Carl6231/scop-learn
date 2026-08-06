@@ -1,0 +1,36 @@
+---
+title: "故障排查"
+lang: zh
+---
+
+## 先确定边界
+
+遇到工作流失败时，先将问题分类为输入、对象或 layer、依赖、方法、资源或解释问题。不要同时改变多个科学决定来掩盖一个错误。
+
+## 常见症状
+
+### “No requested features are present”
+
+检查活动 assay、layer、feature 名称，以及是否完成标准化或可变特征选择。包已安装不代表对象状态正确。
+
+### 所有细胞都被过滤
+
+先查看真实 count 和 feature 分布，再选择阈值。小型合成 fixture 可能需要宽松阈值来做软件 smoke test；这不是研究建议。
+
+### 缺少 reduction 或 graph
+
+检查执行顺序和输入维度。加载包不会自动创建 reduction。
+
+### 空间函数没有结果
+
+确认坐标列、坐标空间、assay layer 和最小 spot 数，然后确认所选后端是否安装。缺失可选后端必须明确报告。
+
+### 图看起来很有说服力，但结论很弱
+
+回到采样单位、重复、设计和证据边界。干净的图不能替代有效的 estimand。
+
+## 升级前先复现
+
+保存最小输入、完整错误文本、`sessionInfo()`、`packageVersion("scop")` 和函数调用。分享前移除本地路径和私有标识。
+
+[上游函数参考](https://mengxu98.github.io/scop/reference/)负责签名；本页负责工作流解释和恢复。

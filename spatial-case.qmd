@@ -1,0 +1,68 @@
+---
+title: "Complete case: spatial"
+---
+
+<span class="version-chip">Executed: SCOP 0.8.9 · R 4.5.1 · synthetic grid</span>
+
+## Biological rationale
+
+Spatial analysis adds coordinates to expression. The first question is not “which spots look interesting?” but “what is the spatial unit, which coordinate system is being used, and what neighborhood definition is reproducible?”
+
+## Input contract
+
+- 60 genes × 36 spots on a 6 × 6 synthetic grid.
+- Coordinates are stored as `col` and `row` in the object metadata.
+- One RNA assay with normalized data for spatial feature scoring.
+- No tissue diagnosis or clinical interpretation.
+
+## Workflow
+
+```r
+library(Seurat)
+library(scop)
+
+srt <- CreateSeuratObject(counts, project = "scop-learn-spatial")
+srt$col <- col
+srt$row <- row
+srt <- NormalizeData(srt, verbose = FALSE)
+srt <- RunSpatialVariableFeatures(
+  srt,
+  method = "moran",
+  coord.cols = c("col", "row"),
+  nfeatures = 10,
+  min_spots = 5,
+  verbose = FALSE
+)
+srt <- RunSpatialNetwork(
+  srt,
+  method = "knn",
+  coord.cols = c("col", "row"),
+  k = 4,
+  verbose = FALSE
+)
+```
+
+The complete executed script is [available in the repository](https://github.com/Carl6231/scop-learn/blob/main/scripts/spatial-case.R). The optional `SpatialQM` backend is not part of this local environment, so it is not silently presented as executed evidence.
+
+![Spatially variable feature summary from the executed synthetic grid.](assets/figures/spatial-overview.png){fig-alt="Spatial variable feature summary over a synthetic grid" fig-cap="The spatial signal and KNN network are workflow evidence for the synthetic grid, not tissue-level biological evidence."}
+
+## Expected insights
+
+- All 36 spots are retained in the normalized object.
+- The spatial-variable-feature step returns a ranked feature summary tied to the coordinate columns.
+- The KNN network records its node count, edge count, active graph name, and parameters in the object tools.
+- The evidence manifest reports the optional-backend limitation explicitly.
+
+## Interpretation boundary
+
+Spatial association is descriptive here. The synthetic grid does not establish a tissue region, mechanism, cell-cell interaction, or clinical result. A real study must define the sampling design, coordinate transformation, neighborhood rule, and replication unit.
+
+## Review checklist
+
+- Confirm the coordinate columns and their units.
+- Confirm that normalization occurred before spatial feature scoring.
+- Inspect the network definition and edge count.
+- State which optional backends were unavailable or not run.
+- Separate spot-level patterns from sample-level inference.
+
+[Evidence manifest](evidence/spatial-case.json) · [Reproducibility policy](reproducibility.qmd)

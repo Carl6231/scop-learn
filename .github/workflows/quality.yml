@@ -1,0 +1,38 @@
+name: quality
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Set up Quarto
+        uses: quarto-dev/quarto-actions/setup@v2
+        with:
+          version: 1.10.18
+      - name: Render site
+        run: quarto render
+      - name: Check rendered routes and leakage
+        shell: bash
+        run: |
+          test -f _site/index.html
+          test -f _site/zh/index.html
+          test -f _site/single-cell-case.html
+          test -f _site/zh/single-cell-case.html
+          test -f _site/spatial-case.html
+          test -f _site/zh/spatial-case.html
+          test -f _site/404.html
+          ! rg -n '(/Users/|/home/|gho_|github_pat_|localhost:|sample_id=)' _site
+          ! rg -n 'href="(undefined|null|#)"' _site
+      - name: Verify evidence manifests are present
+        run: |
+          test -s evidence/single-cell-case.json
+          test -s evidence/spatial-case.json

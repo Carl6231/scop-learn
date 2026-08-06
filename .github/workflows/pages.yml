@@ -1,0 +1,57 @@
+name: deploy-pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Set up Quarto
+        uses: quarto-dev/quarto-actions/setup@v2
+        with:
+          version: 1.10.18
+      - name: Render site
+        run: quarto render
+      - name: Stamp build identity
+        env:
+          SITE_COMMIT: ${{ github.sha }}
+          SITE_BUILD_TIME: ${{ github.run_started_at }}
+        run: |
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          commit = os.environ["SITE_COMMIT"]
+          build_time = os.environ["SITE_BUILD_TIME"]
+          for path in Path("_site").rglob("*.html"):
+              text = path.read_text(encoding="utf-8")
+              text = text.replace("__SITE_COMMIT__", commit).replace("__SITE_BUILD_TIME__", build_time)
+              path.write_text(text, encoding="utf-8")
+          PY
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

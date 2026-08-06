@@ -1,0 +1,75 @@
+---
+---
+
+::: {.hero-learn}
+<div class="eyebrow">SCOP Learn · source-grounded curriculum</div>
+
+# From rationale to reproducible result.
+
+SCOP Learn is a bilingual teaching site for the SCOP R package. Each lesson keeps the same rhythm: biological rationale, R code, expected insights, interpretation boundary, and provenance.
+
+<span class="version-chip">Validated locally with SCOP 0.8.9</span>
+:::
+
+::: {.grid .gap-4 .mb-5}
+::: {.g-col-12 .g-col-md-4}
+::: {.lesson-card}
+## Start with a map
+
+[Follow the learning path](start-here.qmd) from data and object structure to a complete analysis.
+:::
+:::
+::: {.g-col-12 .g-col-md-4}
+::: {.lesson-card}
+## Understand the pieces
+
+[Read the concepts](concepts.qmd) behind assays, layers, reductions, metadata, and evidence.
+:::
+:::
+::: {.g-col-12 .g-col-md-4}
+::: {.lesson-card}
+## Run two cases
+
+[Single-cell](single-cell-case.qmd) and [spatial](spatial-case.qmd) cases are executed locally and published with provenance.
+:::
+:::
+:::
+
+## How to use this site
+
+1. Read the biological question before copying code.
+2. Confirm that your input matches the lesson contract.
+3. Run the smallest checkpoint first.
+4. Compare your result with the expected insight, not with a decorative screenshot.
+5. Record the package, R, data, and environment identities.
+
+::: {.grid .gap-4}
+::: {.g-col-12 .g-col-md-6}
+::: {.case-card}
+## Complete single-cell case
+
+A synthetic two-state count matrix is carried through QC, normalization, variable-feature selection, PCA, neighbors, clusters, UMAP, and dimension estimation.
+
+[Open the case →](single-cell-case.qmd)
+:::
+:::
+::: {.g-col-12 .g-col-md-6}
+::: {.case-card}
+## Complete spatial case
+
+A synthetic spatial grid is carried through normalization, spatially variable feature scoring, and a KNN spatial network.
+
+[Open the case →](spatial-case.qmd)
+:::
+:::
+:::
+
+::: {.boundary}
+SCOP Learn teaches reproducible package use. It does not turn exploratory cell- or spot-level patterns into clinical, patient-level, or causal claims.
+:::
+
+## Keep the sources distinct
+
+- [SCOP API Reference](https://mengxu98.github.io/scop/reference/) — the upstream function-level reference.
+- [SCOP Studio](https://carl6231.github.io/scop-studio-site/) — the separate product and local workflow site.
+- [Reproducibility](reproducibility.qmd) — version, data, environment, and artifact records for this site.

@@ -1,0 +1,21 @@
+---
+title: "Reference gateway"
+---
+
+## Keep one API authority
+
+The generated function reference is maintained upstream. Use it for exact arguments, defaults, return values, and package-level examples:
+
+<https://mengxu98.github.io/scop/reference/>
+
+The current upstream reference includes the `scop` function index, articles, and versioned package navigation. SCOP Learn adds a teaching layer around those functions; it does not copy or override generated API pages.
+
+## Useful starting points
+
+- [RunStandardWorkflow](https://mengxu98.github.io/scop/reference/RunStandardWorkflow.html)
+- [RunCellQC](https://mengxu98.github.io/scop/reference/RunCellQC.html)
+- [RunDimsEstimate](https://mengxu98.github.io/scop/reference/RunDimsEstimate.html)
+- [RunSpatialNetwork](https://mengxu98.github.io/scop/reference/RunSpatialNetwork.html)
+- [RunSpatialVariableFeatures](https://mengxu98.github.io/scop/reference/RunSpatialVariableFeatures.html)
+
+If a linked page changes or disappears, the site link check should fail and the lesson should be reviewed before release.

@@ -1,0 +1,52 @@
+---
+title: "Start here"
+---
+
+## The route
+
+SCOP is easiest to learn as a sequence of decisions, not as a list of functions:
+
+1. Define the biological question and the unit of observation.
+2. Confirm the input format, assay, feature type, sample structure, and metadata.
+3. Build or validate the Seurat object.
+4. Inspect quality before interpreting clusters.
+5. Normalize and identify variable features.
+6. Reduce dimensions, build neighbors, and inspect cluster stability.
+7. Annotate with markers and external knowledge.
+8. Choose a downstream question: abundance, differential expression, enrichment, trajectory, communication, regulation, or spatial organization.
+9. Record the exact code, package version, data identity, and interpretation boundary.
+
+## A minimal first checkpoint
+
+```r
+library(Seurat)
+library(scop)
+
+srt <- CreateSeuratObject(counts = counts, project = "my-study")
+srt <- RunCellQC(
+  srt,
+  qc_metrics = c("umi", "gene", "mito"),
+  UMI_threshold = 300,
+  gene_threshold = 100,
+  verbose = FALSE
+)
+```
+
+The thresholds are study-specific. Treat them as an explicit decision, not a universal constant.
+
+## The SCOP construction order
+
+For a package-level workflow, keep the order visible and test each seam:
+
+`db_scDblFinder()` → `JoinLayers()` → `clustertree()` → `SCTransform()` + `Harmony_integrate()` or `Harmony()` → `RunDimsEstimate()` → downstream analysis.
+
+The exact functions and arguments must be checked against the target SCOP version and the upstream reference before reuse.
+
+## Before moving on
+
+- Can you state what one cell or spot represents?
+- Can you identify the assay and layer used by each step?
+- Can you explain which cells were filtered and why?
+- Can you distinguish a descriptive plot from a biological claim?
+
+[Continue to Concepts →](concepts.qmd)

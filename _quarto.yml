@@ -1,0 +1,78 @@
+project:
+  type: website
+  output-dir: _site
+  render:
+    - "*.qmd"
+    - "zh/*.qmd"
+
+website:
+  title: "SCOP Learn"
+  description: "A source-grounded, bilingual curriculum for the SCOP R package."
+  site-url: https://carl6231.github.io/scop-learn/
+  repo-url: https://github.com/Carl6231/scop-learn
+  repo-actions: [edit, issue]
+  search: true
+  bread-crumbs: true
+  page-navigation: true
+  navbar:
+    background: "#07111f"
+    foreground: "#f8fafc"
+    title: "SCOP Learn"
+    left:
+      - text: "Start here"
+        href: start-here.qmd
+      - text: "Concepts"
+        href: concepts.qmd
+      - text: "Cases"
+        menu:
+          - text: "Single-cell case"
+            href: single-cell-case.qmd
+          - text: "Spatial case"
+            href: spatial-case.qmd
+      - text: "Reproducibility"
+        href: reproducibility.qmd
+      - text: "Troubleshooting"
+        href: troubleshooting.qmd
+      - text: "Reference"
+        href: reference.qmd
+    right:
+      - text: "English"
+        href: index.qmd
+      - text: "中文"
+        href: zh/index.qmd
+      - icon: github
+        href: https://github.com/Carl6231/scop-learn
+        aria-label: "GitHub repository"
+  page-footer:
+    left: "SCOP Learn · package education · source __SITE_COMMIT__ · build __SITE_BUILD_TIME__"
+    right:
+      - text: "SCOP Studio"
+        href: https://carl6231.github.io/scop-studio-site/
+      - text: "Upstream reference"
+        href: https://mengxu98.github.io/scop/reference/
+
+format:
+  html:
+    theme: cosmo
+    css: styles.css
+    title-block-style: none
+    toc: true
+    toc-depth: 2
+    smooth-scroll: true
+    link-external-newwindow: true
+    anchor-sections: true
+    code-copy: true
+    include-in-header:
+      text: |
+        <meta name="robots" content="index,follow">
+        <meta name="theme-color" content="#07111f">
+        <script>
+        document.addEventListener("DOMContentLoaded", function () {
+          document.querySelectorAll(".navbar-toggler[role='menu']").forEach(function (node) {
+            node.removeAttribute("role");
+          });
+        });
+        </script>
+
+execute:
+  enabled: false

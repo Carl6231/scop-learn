@@ -1,0 +1,37 @@
+---
+title: "Troubleshooting"
+---
+
+## Start with the boundary
+
+When a workflow fails, first classify the failure as input, object/layer, dependency, method, resource, or interpretation. Do not patch an error by changing several scientific decisions at once.
+
+## Common symptoms
+
+### “No requested features are present”
+
+Check the active assay, layer, feature names, and whether normalization or variable-feature selection was performed. A function can be installed and still receive the wrong object state.
+
+### Every cell is filtered
+
+Inspect the actual count and feature distributions before selecting thresholds. Tiny synthetic fixtures often need deliberately permissive thresholds for a software smoke test; those thresholds are not study recommendations.
+
+### A reduction or graph is missing
+
+Check the order of operations and the dimensions supplied. A reduction is not created merely because the package is loaded.
+
+### A spatial function returns no result
+
+Confirm coordinate columns, coordinate space, assay layer, and minimum spot count. Then check whether the selected backend is installed. Missing optional backends should be reported explicitly.
+
+### The plot looks convincing but the claim is weak
+
+Return to the sampling unit, replication, design, and evidence boundary. A clean visualization is not a substitute for a supported estimand.
+
+## Reproduce before escalating
+
+Save the smallest input, the exact error text, `sessionInfo()`, `packageVersion("scop")`, and the function call. Remove local paths and private identifiers before sharing.
+
+## Reference
+
+Use the [upstream function reference](https://mengxu98.github.io/scop/reference/) for signatures, then return here for workflow interpretation and recovery.

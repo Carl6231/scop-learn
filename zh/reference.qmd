@@ -1,0 +1,22 @@
+---
+title: "参考入口"
+lang: zh
+---
+
+## 保持一个 API 权威来源
+
+生成的函数参考由上游维护。精确参数、默认值、返回值和包级示例请使用：
+
+<https://mengxu98.github.io/scop/reference/>
+
+SCOP Learn 在函数周围增加教学层，但不复制或覆盖生成式 API 页面。
+
+## 推荐入口
+
+- [RunStandardWorkflow](https://mengxu98.github.io/scop/reference/RunStandardWorkflow.html)
+- [RunCellQC](https://mengxu98.github.io/scop/reference/RunCellQC.html)
+- [RunDimsEstimate](https://mengxu98.github.io/scop/reference/RunDimsEstimate.html)
+- [RunSpatialNetwork](https://mengxu98.github.io/scop/reference/RunSpatialNetwork.html)
+- [RunSpatialVariableFeatures](https://mengxu98.github.io/scop/reference/RunSpatialVariableFeatures.html)
+
+如果某个链接页面改变或消失，站点链接检查应当失败，课程必须在发布前重新审阅。

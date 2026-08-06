@@ -1,0 +1,9 @@
+---
+title: "Page not found"
+---
+
+The lesson you requested is not in this release of SCOP Learn.
+
+- Return to the [SCOP Learn home page](index.qmd).
+- Start with [Start here](start-here.qmd).
+- Open the [upstream reference](https://mengxu98.github.io/scop/reference/).

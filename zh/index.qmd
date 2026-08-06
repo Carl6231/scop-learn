@@ -1,0 +1,76 @@
+---
+lang: zh
+---
+
+::: {.hero-learn}
+<div class="eyebrow">SCOP Learn · 有来源的课程</div>
+
+# 从原理到可复现结果。
+
+SCOP Learn 是面向 SCOP R 包的双语教学站。每篇课程都保持同样的节奏：生物学原理、R 代码、预期洞察、解释边界和复现来源。
+
+<span class="version-chip">已在本地用 SCOP 0.8.9 验证</span>
+:::
+
+::: {.grid .gap-4 .mb-5}
+::: {.g-col-12 .g-col-md-4}
+::: {.lesson-card}
+## 先建立地图
+
+[按照学习路径](start-here.html) 从输入和对象结构走到完整分析。
+:::
+:::
+::: {.g-col-12 .g-col-md-4}
+::: {.lesson-card}
+## 理解组件
+
+[阅读核心概念](concepts.html)，理解 assay、layer、reduction、metadata 和证据。
+:::
+:::
+::: {.g-col-12 .g-col-md-4}
+::: {.lesson-card}
+## 完成两个案例
+
+[单细胞](single-cell-case.html)和[空间](spatial-case.html)案例均在本地真实执行并附带来源记录。
+:::
+:::
+:::
+
+## 使用方法
+
+1. 先读生物学问题，再复制代码。
+2. 确认输入符合课程契约。
+3. 先运行最小检查点。
+4. 将结果与预期洞察比较，不要只追求漂亮截图。
+5. 记录包、R、数据和环境身份。
+
+::: {.grid .gap-4}
+::: {.g-col-12 .g-col-md-6}
+::: {.case-card}
+## 完整单细胞案例
+
+使用合成双状态计数矩阵完成 QC、标准化、可变特征、PCA、邻居、聚类、UMAP 和维度估计。
+
+[打开案例 →](single-cell-case.html)
+:::
+:::
+::: {.g-col-12 .g-col-md-6}
+::: {.case-card}
+## 完整空间案例
+
+使用合成空间网格完成标准化、空间变异特征打分和 KNN 空间网络。
+
+[打开案例 →](spatial-case.html)
+:::
+:::
+:::
+
+::: {.boundary}
+SCOP Learn 教授可复现的包使用方法，不会把探索性的细胞级或 spot 级模式扩展成临床、患者级或因果结论。
+:::
+
+## 区分三个来源
+
+- [SCOP API Reference](https://mengxu98.github.io/scop/reference/) — 上游函数级参考。
+- [SCOP Studio](https://carl6231.github.io/scop-studio-site/) — 独立的产品和本地工作流站点。
+- [复现说明](reproducibility.html) — 本站案例的版本、数据、环境和制品记录。

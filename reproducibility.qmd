@@ -1,0 +1,47 @@
+---
+title: "Reproducibility"
+---
+
+## Version lock
+
+The first published cases were executed locally with:
+
+- R 4.5.1
+- SCOP 0.8.9
+- Seurat and ggplot2 from the installed environment
+- Quarto 1.10.18 for site rendering
+- Synthetic, repository-owned inputs generated with fixed random seeds
+
+The live upstream reference may describe a different release. Every case page therefore states its target version, and the build records the current site commit separately from the analysis identity.
+
+## Evidence manifests
+
+Each complete case stores a JSON manifest containing:
+
+- case name and scope
+- data dimensions and seed
+- package versions
+- workflow functions
+- result summary
+- generated figure path and SHA-256 hash
+- known limitations
+
+These manifests are not a substitute for study-level provenance; they make the tutorial claim auditable.
+
+## Build policy
+
+- Lightweight static content is rendered in GitHub Actions.
+- The case scripts are run deliberately and their outputs are reviewed before publication.
+- Heavy or optional backends are labeled when not rerun by the Pages build.
+- No CI job downloads private data or depends on an absolute local path.
+- A site release is traceable to a Git commit and a Quarto version.
+
+## Re-run locally
+
+```bash
+Rscript scripts/single-cell-case.R
+Rscript scripts/spatial-case.R
+quarto render
+```
+
+Inspect the actual PNGs and the generated HTML before pushing `main`.

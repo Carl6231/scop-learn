@@ -1,0 +1,10 @@
+---
+title: "页面不存在"
+lang: zh
+---
+
+你访问的课程不在当前版本的 SCOP Learn 中。
+
+- 返回 [SCOP Learn 首页](index.html)。
+- 从[这里开始](start-here.html)。
+- 打开[上游函数参考](https://mengxu98.github.io/scop/reference/)。

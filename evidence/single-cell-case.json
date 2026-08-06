@@ -1,0 +1,24 @@
+{
+  "case": "single-cell",
+  "scope": "synthetic two-state workflow",
+  "seed": 20260807,
+  "cells": 80,
+  "genes": 120,
+  "groups": {
+    "state_A": 40,
+    "state_B": 40
+  },
+  "clusters": 2,
+  "reductions": ["pca", "umap"],
+  "estimated_dims": [1, 2, 3, 4, 5, 6, 7, 8, 9],
+  "package_versions": {
+    "R": "4.5.1",
+    "scop": "0.8.9",
+    "Seurat": "5.5.0",
+    "ggplot2": "4.0.3"
+  },
+  "workflow": ["RunCellQC", "NormalizeData", "FindVariableFeatures", "ScaleData", "RunPCA", "FindNeighbors", "FindClusters", "RunUMAP", "RunDimsEstimate"],
+  "figure": "assets/figures/single-cell-overview.png",
+  "figure_sha256": "0b769d2cc5bb188ac5a7a612f52775c655aa31909acc10e5fb1134f1571f35ff",
+  "limitations": ["synthetic input", "declared groups are not discovered cell types", "not clinical or patient-level evidence"]
+}

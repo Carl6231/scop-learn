@@ -1,0 +1,53 @@
+---
+title: "从这里开始"
+lang: zh
+---
+
+## 学习路线
+
+SCOP 最适合按照一连串决定来学习，而不是按照函数列表来学习：
+
+1. 明确生物学问题和观测单位。
+2. 确认输入格式、assay、feature 类型、样本结构和 metadata。
+3. 构建或验证 Seurat 对象。
+4. 在解释 cluster 之前检查质量。
+5. 标准化并识别可变特征。
+6. 降维、构建邻居并检查聚类稳定性。
+7. 使用 marker 和外部知识进行注释。
+8. 选择下游问题：组成、差异表达、富集、轨迹、通讯、调控或空间组织。
+9. 记录精确代码、包版本、数据身份和解释边界。
+
+## 第一个检查点
+
+```r
+library(Seurat)
+library(scop)
+
+srt <- CreateSeuratObject(counts = counts, project = "my-study")
+srt <- RunCellQC(
+  srt,
+  qc_metrics = c("umi", "gene", "mito"),
+  UMI_threshold = 300,
+  gene_threshold = 100,
+  verbose = FALSE
+)
+```
+
+阈值取决于研究设计。它们必须被作为显式决定记录，而不是当成通用常量。
+
+## SCOP 构建顺序
+
+对于包级工作流，保持这个顺序并逐个检查接口：
+
+`db_scDblFinder()` → `JoinLayers()` → `clustertree()` → `SCTransform()` + `Harmony_integrate()` 或 `Harmony()` → `RunDimsEstimate()` → 下游分析。
+
+具体函数和参数必须在使用前根据目标 SCOP 版本和上游参考重新核对。
+
+## 继续之前
+
+- 你能说清一个 cell 或 spot 代表什么吗？
+- 你知道每一步使用哪个 assay 和 layer 吗？
+- 你能解释哪些细胞被过滤以及为什么吗？
+- 你能区分描述性图形和生物学结论吗？
+
+[继续阅读核心概念 →](concepts.html)
