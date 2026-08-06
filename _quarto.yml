@@ -68,7 +68,11 @@ format:
     include-before-body:
       text: |
         <a class="skip-link no-external" href="#quarto-document-content" target="_self">Skip to content / 跳转到正文</a>
-        <script>document.getElementById('quarto-document-content')?.setAttribute('tabindex', '-1');</script>
+        <script>
+        document.getElementById('quarto-document-content')?.setAttribute('tabindex', '-1');
+        document.querySelector('.navbar')?.setAttribute('aria-label', 'Primary navigation / 主导航');
+        document.querySelector('#TOC')?.setAttribute('aria-label', 'On this page / 本页目录');
+        </script>
     link-external-newwindow: true
     anchor-sections: true
     code-copy: true
