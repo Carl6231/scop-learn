@@ -1,4 +1,5 @@
 ---
+pagetitle: "SCOP Learn"
 ---
 
 ::: {.hero-learn}

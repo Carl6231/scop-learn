@@ -1,5 +1,6 @@
 ---
 lang: zh
+pagetitle: "SCOP Learn"
 ---
 
 ::: {.hero-learn}
