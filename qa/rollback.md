@@ -17,3 +17,10 @@ Rollback policy for `Carl6231/scop-learn`:
 - 404 route: <https://carl6231.github.io/scop-learn/404.html> — HTTP 200
 - Production browser checks: root/Chinese route headings, stamped commit, search, and 390px overflow checks passed.
 - The first queued dispatch (`31127536198`) failed before a job was assigned; it was superseded by the successful run above. A duplicate dispatch (`31127737189`) was cancelled after the successful deployment and did not alter production.
+
+## Current production record
+
+- Current deployed commit: `8bb8f096694bf6372969d864fe8ee6a115cefabd`
+- Successful Pages workflow run: `31128261379` ([run](https://github.com/Carl6231/scop-learn/actions/runs/31128261379))
+- Successful Pages deployment: `5785010108` (environment `github-pages`, ref `main`)
+- The deployment includes explicit `SCOP Learn` browser titles for both language roots.
