@@ -27,10 +27,10 @@ jobs:
       - name: Render site
         run: quarto render
       - name: Stamp build identity
-        env:
-          SITE_COMMIT: ${{ github.sha }}
-          SITE_BUILD_TIME: ${{ github.run_started_at }}
         run: |
+          SITE_COMMIT="${{ github.sha }}"
+          SITE_BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          export SITE_COMMIT SITE_BUILD_TIME
           python3 - <<'PY'
           import os
           from pathlib import Path
@@ -43,11 +43,20 @@ jobs:
       - name: Verify build identity
         env:
           SITE_COMMIT: ${{ github.sha }}
-          SITE_BUILD_TIME: ${{ github.run_started_at }}
         run: |
-          ! rg -n 'SITE_COMMIT_PLACEHOLDER|SITE_BUILD_TIME_PLACEHOLDER' _site
-          rg -F -n "$SITE_COMMIT" _site
-          rg -F -n "$SITE_BUILD_TIME" _site
+          python3 - <<'PY'
+          import os
+          import re
+          from pathlib import Path
+
+          commit = os.environ["SITE_COMMIT"]
+          text = "\n".join(path.read_text(encoding="utf-8") for path in Path("_site").rglob("*.html"))
+          assert "SITE_COMMIT_PLACEHOLDER" not in text
+          assert "SITE_BUILD_TIME_PLACEHOLDER" not in text
+          assert commit in text
+          assert re.search(r"build (?:<strong>)?20\\d\\d-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\dZ(?:</strong>)?", text)
+          print(f"Build identity verified for {commit}")
+          PY
           PY
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
