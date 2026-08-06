@@ -22,3 +22,5 @@ Checks completed on 2026-08-07:
 - axe checks: PASS; 0 violations on English and Chinese home routes.
 
 The two PNG outputs and JSON evidence manifests are the actual inspected case artifacts. Optional `SpatialQM` is explicitly recorded as unavailable in this environment and is not claimed as executed.
+
+Production re-check after Pages deployment: root, `/zh/`, and `404.html` returned HTTP 200; both language titles, search, stamped commit, and 390px mobile overflow checks passed.
