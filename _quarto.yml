@@ -4,10 +4,14 @@ project:
   render:
     - "*.qmd"
     - "zh/*.qmd"
+  resources:
+    - assets/social-card.svg
+    - assets/social-card.png
 
 website:
   title: "SCOP Learn"
   description: "A source-grounded, bilingual curriculum for the SCOP R package."
+  favicon: assets/favicon.svg
   site-url: https://carl6231.github.io/scop-learn/
   repo-url: https://github.com/Carl6231/scop-learn
   repo-actions: [edit, issue]
@@ -55,10 +59,20 @@ format:
   html:
     theme: cosmo
     css: styles.css
+    filters:
+      - filters/seo.lua
     title-block-style: none
     toc: true
     toc-depth: 2
     smooth-scroll: true
+    include-before-body:
+      text: |
+        <a class="skip-link no-external" href="#quarto-document-content" target="_self">Skip to content / 跳转到正文</a>
+        <script>
+        document.getElementById('quarto-document-content')?.setAttribute('tabindex', '-1');
+        document.querySelector('.navbar')?.setAttribute('aria-label', 'Primary navigation / 主导航');
+        document.querySelector('#TOC')?.setAttribute('aria-label', 'On this page / 本页目录');
+        </script>
     link-external-newwindow: true
     anchor-sections: true
     code-copy: true
