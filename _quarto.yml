@@ -48,7 +48,7 @@ website:
         href: https://github.com/Carl6231/scop-learn
         aria-label: "GitHub repository"
   page-footer:
-    left: "SCOP Learn · package education · source __SITE_COMMIT__ · build __SITE_BUILD_TIME__"
+    left: "SCOP Learn · package education · source SITE_COMMIT_PLACEHOLDER · build SITE_BUILD_TIME_PLACEHOLDER"
     right:
       - text: "SCOP Studio"
         href: https://carl6231.github.io/scop-studio-site/

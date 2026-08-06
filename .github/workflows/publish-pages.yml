@@ -38,8 +38,16 @@ jobs:
           build_time = os.environ["SITE_BUILD_TIME"]
           for path in Path("_site").rglob("*.html"):
               text = path.read_text(encoding="utf-8")
-              text = text.replace("__SITE_COMMIT__", commit).replace("__SITE_BUILD_TIME__", build_time)
+              text = text.replace("SITE_COMMIT_PLACEHOLDER", commit).replace("SITE_BUILD_TIME_PLACEHOLDER", build_time)
               path.write_text(text, encoding="utf-8")
+      - name: Verify build identity
+        env:
+          SITE_COMMIT: ${{ github.sha }}
+          SITE_BUILD_TIME: ${{ github.run_started_at }}
+        run: |
+          ! rg -n 'SITE_COMMIT_PLACEHOLDER|SITE_BUILD_TIME_PLACEHOLDER' _site
+          rg -F -n "$SITE_COMMIT" _site
+          rg -F -n "$SITE_BUILD_TIME" _site
           PY
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
