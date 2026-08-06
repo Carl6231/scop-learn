@@ -32,8 +32,171 @@ jobs:
           test -f _site/zh/spatial-case.html
           test -f _site/404.html
           ! rg -n '(/Users/|/home/|gho_|github_pat_|localhost:|sample_id=)' _site
-          ! rg -n 'href="(undefined|null|#)"' _site
+          ! rg -n 'href="(undefined|null)"' _site
+      - name: Check metadata, language parity, and publishable assets
+        env:
+          SITE_BASE: https://carl6231.github.io/scop-learn/
+        run: |
+          test -s _site/robots.txt
+          test -s _site/sitemap.xml
+          test -s _site/assets/favicon.svg
+          test -s _site/assets/social-card.png
+          python3 - <<'PY'
+          import os
+          import re
+          from pathlib import Path
+
+          site = Path("_site")
+          base = os.environ["SITE_BASE"]
+          english = {p.name for p in site.glob("*.html")}
+          chinese = {p.name for p in (site / "zh").glob("*.html")}
+          assert english == chinese, (english, chinese)
+
+          for path in sorted(site.glob("**/*.html")):
+              rel = path.relative_to(site).as_posix()
+              route = rel[3:] if rel.startswith("zh/") else rel
+              language = "zh" if rel.startswith("zh/") else "en"
+              if route == "index.html":
+                  canonical = base + ("zh/" if language == "zh" else "")
+              else:
+                  canonical = base + ("zh/" if language == "zh" else "") + route
+              text = path.read_text(encoding="utf-8")
+              assert len(re.findall(r"<title>.*?</title>", text, re.S)) == 1, rel
+              assert len(re.findall(r'<meta name="description"', text)) == 1, rel
+              assert re.findall(r'<link rel="canonical" href="([^"]+)"', text) == [canonical], rel
+              expected_en = base + ("" if route == "index.html" else route)
+              expected_zh = base + "zh/" + ("" if route == "index.html" else route)
+              alternates = dict(re.findall(r'<link rel="alternate" hreflang="([^"]+)" href="([^"]+)"', text))
+              assert alternates == {"en": expected_en, "zh-Hans": expected_zh, "x-default": expected_en}, rel
+              assert text.count('property="og:image"') == 1 and (base + "assets/social-card.png") in text, rel
+              assert text.count('name="twitter:image"') == 1 and (base + "assets/social-card.png") in text, rel
+              assert "assets/favicon.svg" in text, rel
+          PY
       - name: Verify evidence manifests are present
         run: |
           test -s evidence/single-cell-case.json
           test -s evidence/spatial-case.json
+      - name: Check links and accessibility structure
+        run: |
+          python3 - <<'PY'
+          from html.parser import HTMLParser
+          from pathlib import Path
+          from urllib.parse import unquote, urlsplit
+
+          site = Path("_site").resolve()
+          base_prefix = "/scop-learn/"
+          problems = []
+
+          class Page(HTMLParser):
+              def __init__(self):
+                  super().__init__()
+                  self.links = []
+                  self.ids = set()
+                  self.images = []
+                  self.h1 = 0
+                  self.main = 0
+                  self.nav = 0
+
+              def handle_starttag(self, tag, attrs):
+                  attrs = dict(attrs)
+                  if attrs.get("id"):
+                      self.ids.add(attrs["id"])
+                  if tag == "a" and attrs.get("href"):
+                      self.links.append(attrs["href"])
+                  if tag == "img":
+                      self.images.append(attrs)
+                  if tag == "h1":
+                      self.h1 += 1
+                  if tag == "main":
+                      self.main += 1
+                  if tag == "nav":
+                      self.nav += 1
+
+          cache = {}
+          def parsed(path):
+              if path not in cache:
+                  doc = Page()
+                  doc.feed(path.read_text(encoding="utf-8"))
+                  cache[path] = doc
+              return cache[path]
+
+          for page in sorted(site.glob("**/*.html")):
+              doc = parsed(page)
+              rel = page.relative_to(site).as_posix()
+              if doc.main != 1 or doc.nav < 1:
+                  problems.append(f"{rel}: missing main/nav landmark")
+              if doc.h1 != 1:
+                  problems.append(f"{rel}: expected one h1, got {doc.h1}")
+              for image in doc.images:
+                  if not image.get("alt"):
+                      problems.append(f"{rel}: image without alt")
+              for href in doc.links:
+                  parts = urlsplit(href)
+                  if parts.scheme or href.startswith("//"):
+                      continue
+                  path = unquote(parts.path)
+                  if path.startswith(base_prefix):
+                      path = path[len(base_prefix):]
+                  elif path.startswith("/"):
+                      path = path[1:]
+                  target = (site / path).resolve() if href.startswith("/") else (page.parent / path).resolve()
+                  if not path:
+                      target = page
+                  elif target.is_dir():
+                      target = target / "index.html"
+                  try:
+                      target.relative_to(site)
+                  except ValueError:
+                      problems.append(f"{rel}: link escapes site {href}")
+                      continue
+                  if not target.exists():
+                      problems.append(f"{rel}: missing link {href}")
+                      continue
+                  if parts.fragment and target.suffix == ".html" and parts.fragment not in parsed(target).ids:
+                      problems.append(f"{rel}: missing anchor {href}")
+          if problems:
+              raise SystemExit("\n".join(problems))
+          print(f"Checked {len(cache)} HTML routes, links, anchors, landmarks, and image alt text")
+          PY
+      - name: Check upstream and external links
+        run: |
+          python3 - <<'PY'
+          import re
+          import time
+          import urllib.request
+          from pathlib import Path
+          from urllib.parse import urlsplit
+
+          base = "https://carl6231.github.io/scop-learn/"
+          allowed_hosts = {"carl6231.github.io", "mengxu98.github.io", "github.com"}
+          urls = set()
+          for path in Path("_site").glob("**/*.html"):
+              urls.update(re.findall(r'href="(https://[^"#]+)', path.read_text(encoding="utf-8")))
+          failures = []
+          for url in sorted(urls):
+              parsed = urlsplit(url)
+              assert parsed.scheme == "https" and parsed.hostname in allowed_hosts, url
+              if url.startswith(base):
+                  continue
+              for attempt in range(3):
+                  try:
+                      request = urllib.request.Request(url, headers={"User-Agent": "scop-site-link-check/1.0"})
+                      with urllib.request.urlopen(request, timeout=20) as response:
+                          if response.status < 400:
+                              break
+                          raise RuntimeError(f"HTTP {response.status}")
+                  except Exception as error:
+                      if attempt == 2:
+                          failures.append(f"{url}: {error}")
+                      else:
+                          time.sleep(1)
+          if failures:
+              raise SystemExit("\n".join(failures))
+          print(f"Checked {len(urls)} HTTPS links; skipped {sum(url.startswith(base) for url in urls)} same-site links")
+          PY
+      - name: Serve rendered site for browser audits
+        run: |
+          python3 -m http.server 4173 --directory _site >/tmp/scop-learn-quality-server.log 2>&1 &
+          sleep 1
+      - name: Run axe accessibility audit
+        run: npx --yes @axe-core/cli@4.12.1 -q --no-reporter http://127.0.0.1:4173/ http://127.0.0.1:4173/zh/
