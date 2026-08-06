@@ -20,7 +20,8 @@ Rollback policy for `Carl6231/scop-learn`:
 
 ## Current production record
 
-- Current deployed commit: `8bb8f096694bf6372969d864fe8ee6a115cefabd`
-- Successful Pages workflow run: `31128261379` ([run](https://github.com/Carl6231/scop-learn/actions/runs/31128261379))
-- Successful Pages deployment: `5785010108` (environment `github-pages`, ref `main`)
-- The deployment includes explicit `SCOP Learn` browser titles for both language roots.
+- Current deployed commit: `edfdf6a2bf55a2532612eba4857feb44493e1f67`
+- Successful quality workflow run: `31129178994` ([run](https://github.com/Carl6231/scop-learn/actions/runs/31129178994))
+- Successful Pages workflow run: `31129202917` ([run](https://github.com/Carl6231/scop-learn/actions/runs/31129202917))
+- Successful Pages deployment: `5785562372` (environment `github-pages`, ref `main`)
+- Production verification: root, `/zh/`, and `404.html` returned HTTP 200; canonical/alternate metadata, PNG social card, favicon, search, stamped commit, keyboard skip link, 390px overflow, no-JavaScript content, and axe-core home audits passed.
