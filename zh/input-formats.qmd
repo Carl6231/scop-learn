@@ -67,6 +67,25 @@ list(
 
 还要确认 raw counts、分类元数据、embedding、spliced/unspliced 层和稳定 feature ID 是否保留。
 
+## CSV 或 TSV 矩阵
+
+稠密文本只适合小矩阵。先确认方向和 ID，再转为稀疏矩阵：
+
+```r
+x <- read.delim("counts.tsv", row.names = 1, check.names = FALSE)
+stopifnot(all(vapply(x, is.numeric, logical(1))))
+stopifnot(!anyDuplicated(rownames(x)), !anyDuplicated(colnames(x)))
+# 合同：行是 genes，列是 cells
+counts <- Matrix::Matrix(as.matrix(x), sparse = TRUE)
+srt <- CreateSeuratObject(counts)
+```
+
+若行名像 barcodes、列名像 genes，应停止并明确转置。大矩阵应保留 Matrix Market/H5 稀疏性，不要写成巨大 CSV。
+
+## 多模态输入
+
+当 10x 返回 RNA、抗体或 peaks 时，应建立独立 assays 并保留各模态 feature ID。`pbmcmultiome_sub` 有 `RNA` 与 `peaks`；只运行 RNA 流程不等于已经完成 ATAC QC、LSI 或 WNN。
+
 ## 多个样本
 
 逐个读取，在 merge 前写入稳定的样本级元数据：

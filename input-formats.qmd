@@ -67,6 +67,26 @@ list(
 
 Check whether raw counts, categorical metadata, embeddings, spliced/unspliced layers, and feature identifiers survived.
 
+## CSV or TSV matrix
+
+Dense text is suitable only for small matrices. Confirm orientation before object construction and convert to a sparse matrix:
+
+```r
+x <- read.delim("counts.tsv", row.names = 1, check.names = FALSE)
+stopifnot(all(vapply(x, is.numeric, logical(1))))
+stopifnot(!anyDuplicated(rownames(x)), !anyDuplicated(colnames(x)))
+
+# expected contract: genes in rows, cells in columns
+counts <- Matrix::Matrix(as.matrix(x), sparse = TRUE)
+srt <- CreateSeuratObject(counts)
+```
+
+If the first rows look like barcodes and the columns look like genes, stop and transpose deliberately. For large data, preserve Matrix Market/H5 sparsity instead of writing a huge dense CSV.
+
+## Multimodal inputs
+
+When 10x returns RNA, antibody, or peak matrices, create separate assays and retain modality-specific feature identities. `pbmcmultiome_sub` contains `RNA` and `peaks`; the RNA workflow does not by itself constitute ATAC QC, latent semantic indexing, or WNN analysis.
+
 ## Several samples
 
 Read each sample separately and add stable sample-level metadata before merge:

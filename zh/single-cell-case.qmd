@@ -53,6 +53,12 @@ srt <- subset(srt, cells = rownames(srt[[]])[keep])
 
 最终保留 **979/1,000（97.9%）** 个细胞。这是本数据的可审计阈值，不是所有组织通用的默认值。
 
+排除审计为：21 个 doublets；检测基因低于 1,000、高于 5,000 或线粒体比例 ≥5% 的细胞均为 0；唯一排除细胞总数 21。各原因单独报告，因为在其他数据中可能重叠。
+
+### 双细胞和环境 RNA 是两类问题
+
+本站验证默认是 `db_scDblFinder()`。`RunDoubletCalling()` 可在依赖和假设匹配时路由其他 caller；应按样本运行并比较 score/class 字段。删除双细胞不能解决 ambient RNA：要检查不合理的跨谱系 marker，只有在 raw counts、batch/background 合适且能做前后 marker 核对时才使用 `RunDecontX()`。
+
 ## 3 · 合并 layers 并构建低维空间
 
 ```r

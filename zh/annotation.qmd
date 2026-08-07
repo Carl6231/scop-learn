@@ -95,3 +95,5 @@ srt$annotation_note
 ```
 
 当证据冲突时保留 `uncertain_T_NK`、`mixed` 或 `unknown`，不要为了图例整齐而强制命名。最终标签要同时通过 marker、丰度、组织背景、cluster 一致性和双细胞标记的核对。
+
+逐 cluster 共识表至少应包含：cluster、正向 markers、矛盾 markers、reference prediction/score、CellTypist label/confidence、final label、uncertainty flag 和 reviewer note。本站证据记录了方法级输出；新研究必须用自己的 cluster 证据填表，不能复制自带 truth labels。

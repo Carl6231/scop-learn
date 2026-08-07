@@ -5,14 +5,14 @@ description: "The real datasets used in SCOP Learn, their provenance, assays, si
 
 The main curriculum uses five real datasets bundled with SCOP plus one public 10x H5. Synthetic data is not primary teaching evidence.
 
-| Dataset | Shape | Assays / modality | Role |
-|---|---:|---|---|
-| `pancreas_sub` | 15,998 × 1,000 | RNA, spliced, unspliced | single-sample QC, clustering, trajectory-ready object |
-| `panc8_sub` | 12,940 × 1,600 | RNA; 8 dataset sources | cross-source integration and pseudobulk demonstration |
-| `pbmcmultiome_sub` | 21,074 × 500 | RNA + peaks | manual markers, label transfer, CellTypist, multiome choices |
-| `visium_human_pancreas_sub` | 5,000 × 1,986 | Spatial; one tissue image | PanIN spot QC, Moran features, network and neighbourhood analysis |
-| `visium_mouse_brain_slices_sub` | 4,000 × 2,000 | Spatial; two slices | multi-slice audit and integration decisions |
-| 10x PBMC 1k v3 H5 | 33,538 × 1,222 | filtered gene expression matrix | raw-file reading and round-trip validation |
+| Dataset | Species | Shape | Assays / modality | Role |
+|---|---|---:|---|---|
+| `pancreas_sub` | mouse | 15,998 × 1,000 | RNA, spliced, unspliced | single-sample QC, clustering, trajectory-ready object |
+| `panc8_sub` | human | 12,940 × 1,600 | RNA; 8 dataset sources | cross-source integration and pseudobulk demonstration |
+| `pbmcmultiome_sub` | human | 21,074 × 500 | RNA + peaks | manual markers, label transfer, CellTypist, multiome choices |
+| `visium_human_pancreas_sub` | human | 5,000 × 1,986 | Spatial; one tissue image | PanIN spot QC, Moran features, network and neighbourhood analysis |
+| `visium_mouse_brain_slices_sub` | mouse | 4,000 × 2,000 | Spatial; two slices | multi-slice audit and integration decisions |
+| 10x PBMC 1k v3 H5 | human | 33,538 × 1,222 | filtered gene expression matrix | raw-file reading and round-trip validation |
 
 ## Load and audit bundled data
 
@@ -38,6 +38,10 @@ Run the same audit for every object. The printed metadata columns define which q
 - `visium_mouse_brain_slices_sub` is derived from two 10x Genomics sagittal anterior mouse-brain slices.
 
 These are teaching and regression-test datasets. Re-running them validates a workflow; it does not create an independent cohort or a new publication claim.
+
+## Licence and redistribution check
+
+The installed SCOP help identifies `visium_mouse_brain_slices_sub` as derived from 10x/SeuratData material under CC BY 4.0. The installed help for the other subsets names their scientific sources but does not state a dataset licence. This site therefore cites their provenance but does **not** assert an unverified redistribution licence; users must check the original study/repository terms before redistributing source matrices. The public 10x H5 is downloaded from the named 10x sample URL and is not committed here.
 
 ## Machine-readable inventory
 

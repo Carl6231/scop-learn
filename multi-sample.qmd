@@ -9,6 +9,8 @@ Two situations look similar in code but support different conclusions.
 
 Use this path when `sample_id` identifies independent donors, animals, or experimental units.
 
+No SCOP bundled teaching object in the audited runtime provides a true condition-by-patient replicated study. Therefore the biological multi-sample section is an executable design template, not a claimed condition result; the real `panc8_sub` run below is restricted to technical-source integration.
+
 ```r
 objects <- SplitObject(merged, split.by = "sample_id")
 

@@ -60,6 +60,8 @@ head(VariableFeatures(srt), 20)
 
 该子集中多数 spots 标为 collagen，islet、acinar、smooth muscle、fat、epithelial 和少量 PanIN-labelled spots 位于更小区域。这仍然是 spot 层面的证据。
 
+图中的 `coda_label` 是数据自带标签，不是本脚本重新发现的 domains。新对象应根据本机可用后端选择 SCOP 导出的空间 domain 方法，再用 domain marker 和组织形态验证后命名区域。
+
 ## 4 · 构建空间图与邻域汇总
 
 ```r
@@ -100,6 +102,8 @@ Images(visium_mouse_brain_slices_sub)
 ![整合前的两个真实小鼠脑 Visium 切片。](../assets/figures/real-data/spatial-mouse-brain-slices.png){fig-alt="两个面板各展示矢状位前部小鼠脑切片抽样的 1,000 个 spots。"}
 
 先逐切片质控和发现空间特征，保留 `sample_id` 与各自坐标系统，再考虑 `RunSpatialIntegration()`。如果切片与生物学条件混杂，整合不能恢复缺失设计，也不能把真实区域差异校正掉。
+
+已发布双切片图是实际运行的整合前审计；由于该子集只有粗粒度 `anterior` region 标签，无法做有意义的生物学保留检验，所以不宣称已完成多切片整合。空间通讯还需要可解析的 sender/receiver 组成、多张独立组织用于组间比较，以及可用的 `RunSpatialCellChat()` 后端；单纯 spot 共表达不能称作细胞通讯。
 
 ::: {.boundary}
 Visium spot 是细胞混合物。Moran 特征与邻域可以支持空间模式结论，但不能证明细胞分辨身份、真实相互作用或因果关系。

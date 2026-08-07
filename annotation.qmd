@@ -95,3 +95,5 @@ srt$annotation_note
 ```
 
 Prefer `uncertain_T_NK`, `mixed`, or `unknown` over a false precise label. Validate final labels with markers, abundance, tissue context, cluster coherence, and doublet flags.
+
+A per-cluster consensus table should contain the cluster, positive markers, contradictory markers, reference prediction and score, CellTypist label and confidence, final label, uncertainty flag, and reviewer note. The published evidence records method-level outputs; a new study must fill this table with its own cluster evidence rather than copy the bundled truth labels.

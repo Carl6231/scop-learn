@@ -133,6 +133,13 @@ keep <- with(qc_before,
   db.scDblFinder_class == "singlet" & nFeature_RNA >= 1000 &
     nFeature_RNA <= 5000 & percent.mt < 5
 )
+excluded_by_reason <- list(
+  doublet = sum(qc_before$db.scDblFinder_class != "singlet"),
+  nFeature_below_1000 = sum(qc_before$nFeature_RNA < 1000),
+  nFeature_above_5000 = sum(qc_before$nFeature_RNA > 5000),
+  percent_mt_at_least_5 = sum(qc_before$percent.mt >= 5),
+  excluded_unique_cells = sum(!keep)
+)
 single <- subset(single, cells = rownames(qc_before)[keep])
 single <- JoinLayers(single)
 single <- NormalizeData(single, verbose = FALSE)
@@ -181,6 +188,7 @@ single_manifest <- list(
     nFeature_median = unname(median(qc_before$nFeature_RNA)), nCount_median = unname(median(qc_before$nCount_RNA)), percent_mt_median = unname(median(qc_before$percent.mt))
   )),
   after = list(cells = ncol(single), retained_percent = round(100 * ncol(single) / ncol(pancreas_sub), 1), cell_types = as_named_counts(single$CellType)),
+  excluded_by_reason = excluded_by_reason,
   thresholds = list(nFeature_RNA = c(1000, 5000), percent_mt_max = 5, doublet_class = "singlet"),
   estimated_dims = as.integer(estimated_dims), dims_used = dims_use,
   final_cluster_column = final_cluster, clusters = length(unique(Idents(single))),
@@ -387,5 +395,6 @@ manifest <- list(
 )
 stopifnot(all(unlist(manifest$critical_assertions)))
 write_json(manifest, "manifest")
-writeLines(capture.output(sessionInfo()), "evidence/real-data/session-info.txt")
+session_lines <- sub("[[:space:]]+$", "", capture.output(sessionInfo()))
+writeLines(session_lines, "evidence/real-data/session-info.txt")
 cat(sprintf("Done: %d component manifests, %d real-data figures\n", length(component_files), length(figures)))

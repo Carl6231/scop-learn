@@ -60,6 +60,8 @@ The top real Moran features include `FBP1`, `CELA3A`, `PNLIP`, `SPP1`, `CLPS`, `
 
 Most spots are labelled collagen in this subset, while islet, acinar, smooth-muscle, fat, epithelial, and rare PanIN-labelled spots occupy smaller regions. The plot is spot-level evidence.
 
+The displayed `coda_label` domains are bundled labels, not domains rediscovered by this script. For a new object, run and compare an exported spatial-domain method appropriate to the installed backend, then validate domain markers and tissue morphology before naming regions.
+
 ## 4 · Build the spatial graph and neighbourhood summary
 
 ```r
@@ -112,6 +114,8 @@ Images(visium_mouse_brain_slices_sub)
 ![Two real mouse-brain Visium slices before integration.](assets/figures/real-data/spatial-mouse-brain-slices.png){fig-alt="Two panels show 1,000 sampled spots from each of two sagittal anterior mouse-brain Visium slices."}
 
 Do QC and spatial-feature discovery per slide, preserve `sample_id` and coordinate systems, and only then consider `RunSpatialIntegration()`. Integration across slides must not erase a biological region or condition that is confounded with slide.
+
+The published two-slice figure is an executed pre-integration audit; multi-slice integration is not claimed because the bundled subset contains only the broad `anterior` region label, which cannot provide a meaningful biology-preservation test. Spatial communication likewise requires resolved sender/receiver composition, multiple independent tissues for group comparison, and a working `RunSpatialCellChat()` backend; spot-level co-expression alone is not called cell-cell signalling.
 
 ::: {.boundary}
 Visium spots are mixtures. Moran features and neighbourhoods support spatial-pattern claims; they do not prove cell-resolved identity, interaction, or causality.

@@ -22,6 +22,13 @@
       "Pre-endocrine": 153
     }
   },
+  "excluded_by_reason": {
+    "doublet": 21,
+    "nFeature_below_1000": 0,
+    "nFeature_above_5000": 0,
+    "percent_mt_at_least_5": 0,
+    "excluded_unique_cells": 21
+  },
   "thresholds": {
     "nFeature_RNA": [1000, 5000],
     "percent_mt_max": 5,
@@ -39,7 +46,7 @@
     },
     "umap": {
       "path": "assets/figures/real-data/single-umap.png",
-      "sha256": "6139130c8a91feb5f84113aa6e1eb07d9d39476b380bb2258a211ea46e0e2786"
+      "sha256": "4c707faa64c6a0458c9b19bce5ebd626d94f6ee40edfa240f9f119cfc314e342"
     },
     "cluster_tree": {
       "path": "assets/figures/real-data/single-cluster-tree.png",
@@ -48,8 +55,8 @@
   },
   "checkpoint": {
     "path": "artifacts/real-data/checkpoints/single-pancreas.rds",
-    "sha256": "1746374127adb2ec10870aa7e98c71f3e8d23d14d1ef794369ff784dd08dd79f",
-    "bytes": 31676176
+    "sha256": "2770d574c455a7e5d7e7c5e4ff4794ba90ba808e68de35be730f331e07173908",
+    "bytes": 31676097
   },
   "claim_boundary": "Cluster-majority accuracy is an internal concordance check against bundled labels, not independent biological validation."
 }

@@ -9,6 +9,8 @@ description: "生物学多样本和跨公开数据集如何分别质控、合并
 
 当 `sample_id` 表示独立患者、动物或实验单位时使用此路线。先分样本计算和查看质控：
 
+审计运行时的 SCOP 自带教程对象没有真正的 condition × patient 重复设计，因此本节是可执行设计模板，不宣称已有条件比较结果；下面真实 `panc8_sub` 运行只用于技术来源整合。
+
 ```r
 objects <- SplitObject(merged, split.by = "sample_id")
 objects <- lapply(objects, function(x) {

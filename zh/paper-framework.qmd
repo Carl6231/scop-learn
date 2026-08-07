@@ -11,26 +11,26 @@ description: "用 SCOP 构建完整单细胞论文所需的图、表、检查点
 
 ## Phase 1 · 数据与质控
 
-**输入：** 不可修改的原始矩阵和 sample sheet。  
-**动作：** [按格式读取](input-formats.qmd)、审计元数据、逐样本 QC、双细胞和污染、记录保留细胞。  
-**输出：** QC 分布、样本保留表、排除理由、RDS 检查点。  
+**输入：** 不可修改的原始矩阵和 sample sheet。
+**动作：** [按格式读取](input-formats.qmd)、审计元数据、逐样本 QC、双细胞和污染、记录保留细胞。
+**输出：** QC 分布、样本保留表、排除理由、RDS 检查点。
 **论文位置：** Methods + Figure 1A/B + 补充 QC。
 
 ## Phase 2 · Atlas 构建
 
-`JoinLayers()` → normalization/SCT → PCA → `RunDimsEstimate()` → neighbours → 多分辨率聚类/`ClusterTreePlot()` → UMAP；只有合理时才整合。  
-**输出：** 整合前后图、batch mixing 与 biology preservation 指标、cluster tree。  
+`JoinLayers()` → normalization/SCT → PCA → `RunDimsEstimate()` → neighbours → 多分辨率聚类/`ClusterTreePlot()` → UMAP；只有合理时才整合。
+**输出：** 整合前后图、batch mixing 与 biology preservation 指标、cluster tree。
 **论文位置：** Figure 1C–F。
 
 ## Phase 3 · 细胞注释
 
-cluster markers → 经典 markers → reference transfer / CellTypist / SingleR → 冲突审查 → final label + confidence。  
-**输出：** marker dot plot/heatmap、注释证据表、不确定细胞数量。  
+cluster markers → 经典 markers → reference transfer / CellTypist / SingleR → 冲突审查 → final label + confidence。
+**输出：** marker dot plot/heatmap、注释证据表、不确定细胞数量。
 **论文位置：** Figure 2 + 注释补充材料。
 
 ## Phase 4 · 核心研究结果
 
-对每个主要细胞类型进行：按生物学样本计算丰度；主要对比的 pseudobulk DEG；从预定义排名统计量做 enrichment/GSEA；对协变量、阈值和低计数样本做敏感性分析。  
+对每个主要细胞类型进行：按生物学样本计算丰度；主要对比的 pseudobulk DEG；从预定义排名统计量做 enrichment/GSEA；对协变量、阈值和低计数样本做敏感性分析。
 **论文位置：** Figures 3–4，通常是推断中心。
 
 ## Phase 5 · 一个连贯的机制扩展
@@ -48,7 +48,7 @@ cluster markers → 经典 markers → reference transfer / CellTypist / SingleR
 
 ## Phase 6 · 空间验证
 
-若有空间数据：spot QC → spatial variable features → domains/networks → neighbourhoods → 基于参考的 deconvolution → 检验单细胞候选程序是否出现在预期位置。  
+若有空间数据：spot QC → spatial variable features → domains/networks → neighbourhoods → 基于参考的 deconvolution → 检验单细胞候选程序是否出现在预期位置。
 **论文位置：** Figure 6。严格区分 spot-level 与 cell-resolved 结论。
 
 ## 每章固定交付合同

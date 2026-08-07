@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-08-07 23:59:45 CST",
+  "generated_at": "2026-08-08 00:56:36 CST",
   "seed": 20260807,
   "components": {
     "runtime": {
       "path": "evidence/real-data/runtime.json",
-      "sha256": "bf3388a306bc74f9e796788282d80affd1169d38e70e70757cee5f0bc3d4c942"
+      "sha256": "43ba486bd87dc7f1835e14349cc88820d669a2debb3f12225bf0f4e97dce22e6"
     },
     "input-formats": {
       "path": "evidence/real-data/input-formats.json",
@@ -13,11 +13,11 @@
     },
     "single-sample": {
       "path": "evidence/real-data/single-sample.json",
-      "sha256": "ffb90c749680b39683b3ca79209f794667b7410e85df4cf361bb799ea8338f68"
+      "sha256": "7016237474ef445f68dfec6095dd5d7ee0153b8dd04613ca3d022d4973063b79"
     },
     "cross-source": {
       "path": "evidence/real-data/cross-source.json",
-      "sha256": "4380ac1f5396f6d182aca6881c62c304f8b5c33db35692f70c612108bb976943"
+      "sha256": "e6cc549787826b0c30662038362b93d3156144d7db79feac1773571484f28ad2"
     },
     "annotation": {
       "path": "evidence/real-data/annotation.json",
@@ -29,7 +29,7 @@
     },
     "spatial": {
       "path": "evidence/real-data/spatial.json",
-      "sha256": "2b00fb42111f613aa9bc68952fe96e648b642fa2a5cead6538fa2812a869390d"
+      "sha256": "4c450f01e6f8e9724f9b2c7639fbdc8c7a8debcf0539e2832cb25ed92445a997"
     }
   },
   "figures": {
@@ -45,8 +45,8 @@
     },
     "cross-source-integration.png": {
       "path": "assets/figures/real-data/cross-source-integration.png",
-      "sha256": "23ec7e75bddf168aa5280390eeab999f5ee8e1474e6f963fe810daae1d5dbee7",
-      "bytes": 240681
+      "sha256": "f63a02f54388d5b9765534c11a03adcb553f8ef60cacd61501619f371d234ee8",
+      "bytes": 238885
     },
     "single-cluster-tree.png": {
       "path": "assets/figures/real-data/single-cluster-tree.png",
@@ -60,8 +60,8 @@
     },
     "single-umap.png": {
       "path": "assets/figures/real-data/single-umap.png",
-      "sha256": "6139130c8a91feb5f84113aa6e1eb07d9d39476b380bb2258a211ea46e0e2786",
-      "bytes": 152674
+      "sha256": "4c707faa64c6a0458c9b19bce5ebd626d94f6ee40edfa240f9f119cfc314e342",
+      "bytes": 152348
     },
     "spatial-human-pancreas.png": {
       "path": "assets/figures/real-data/spatial-human-pancreas.png",

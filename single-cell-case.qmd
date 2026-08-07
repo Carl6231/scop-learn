@@ -53,6 +53,12 @@ srt <- subset(srt, cells = rownames(srt[[]])[keep])
 
 This retained **979/1,000 cells (97.9%)**. The thresholds are recorded evidence, not universal defaults.
 
+The exclusion audit is explicit: 21 doublets; 0 cells below 1,000 or above 5,000 detected genes; 0 cells at or above 5% mitochondrial reads; 21 unique cells excluded. Reasons are reported separately because they can overlap in other datasets.
+
+### Doublets and ambient RNA are different problems
+
+`db_scDblFinder()` is the verified default here. `RunDoubletCalling()` can route other supported callers when their dependencies and assumptions fit; compare score/class columns and run per sample. Ambient contamination is not solved by removing doublets: inspect suspicious cross-lineage markers and use `RunDecontX()` only with raw counts, suitable batches/background, and before/after marker checks.
+
 ## 3 · Join layers and construct the embedding
 
 ```r

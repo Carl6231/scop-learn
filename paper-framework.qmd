@@ -18,21 +18,21 @@ Write down:
 
 ## Phase 1 · Data and QC
 
-**Inputs:** raw matrices and immutable sample sheet.  
-**Actions:** [read format](input-formats.qmd), audit metadata, calculate per-sample QC, doublets and contamination, record retained cells.  
-**Outputs:** QC distributions, sample-retention table, excluded-cell reasons, checkpoint.  
+**Inputs:** raw matrices and immutable sample sheet.
+**Actions:** [read format](input-formats.qmd), audit metadata, calculate per-sample QC, doublets and contamination, record retained cells.
+**Outputs:** QC distributions, sample-retention table, excluded-cell reasons, checkpoint.
 **Paper role:** Methods + Figure 1A/B + Supplementary QC.
 
 ## Phase 2 · Atlas construction
 
-**Actions:** `JoinLayers()` → normalization/SCT → PCA → `RunDimsEstimate()` → neighbours → multi-resolution clustering / `ClusterTreePlot()` → UMAP; integration only when justified.  
-**Outputs:** pre/post-integration plots, batch-mixing and biology-preservation checks, resolution tree.  
+**Actions:** `JoinLayers()` → normalization/SCT → PCA → `RunDimsEstimate()` → neighbours → multi-resolution clustering / `ClusterTreePlot()` → UMAP; integration only when justified.
+**Outputs:** pre/post-integration plots, batch-mixing and biology-preservation checks, resolution tree.
 **Paper role:** Figure 1C–F.
 
 ## Phase 3 · Annotation
 
-**Actions:** cluster markers → canonical markers → reference transfer / CellTypist / SingleR → conflict review → final label + confidence.  
-**Outputs:** marker dot plot/heatmap, annotation provenance table, uncertain-cell count.  
+**Actions:** cluster markers → canonical markers → reference transfer / CellTypist / SingleR → conflict review → final label + confidence.
+**Outputs:** marker dot plot/heatmap, annotation provenance table, uncertain-cell count.
 **Paper role:** Figure 2 + annotation supplement.
 
 ## Phase 4 · Core study result
@@ -63,7 +63,7 @@ Choose only modules that support the main question:
 
 ## Phase 6 · Spatial validation
 
-If spatial data exists: spot QC → spatially variable features → domains/networks → neighbourhoods → reference-based deconvolution → test whether the single-cell candidate programme localises as expected.  
+If spatial data exists: spot QC → spatially variable features → domains/networks → neighbourhoods → reference-based deconvolution → test whether the single-cell candidate programme localises as expected.
 **Paper role:** Figure 6. Keep spot-level and cell-resolved claims separate.
 
 ## Deliverable contract per chapter

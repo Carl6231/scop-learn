@@ -40,7 +40,7 @@
   },
   "checkpoint": {
     "path": "artifacts/real-data/checkpoints/spatial-human-pancreas.rds",
-    "sha256": "77a9d4b42347079b17bfbf3f377f68eaa8ae175ca4ebf4845e42418d5de28a4f",
+    "sha256": "e6740de84d215e4820759c65ce83c4506a03c7ad86232356b0ca1dd800a72312",
     "bytes": 15906073
   },
   "deconvolution": {
