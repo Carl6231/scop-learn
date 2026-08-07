@@ -1,5 +1,5 @@
 ---
-title: "SCOP Learn — real-data single-cell and spatial workflows"
+pagetitle: "SCOP Learn — real-data single-cell and spatial workflows"
 description: "A bilingual, executable curriculum built from SCOP 0.8.9 bundled datasets and a public 10x H5 file."
 ---
 

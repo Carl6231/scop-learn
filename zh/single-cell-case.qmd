@@ -3,8 +3,6 @@ title: "真实单样本完整流程"
 description: "用真实 pancreas_sub 完成质控、双细胞、layers、维度、聚类稳定性、UMAP、marker 和注释核对。"
 ---
 
-# 真实单样本完整流程
-
 本章实际运行 `scop::pancreas_sub`：真实小鼠胰腺内分泌发生子集，包含 15,998 个特征、1,000 个细胞，以及可供后续轨迹分析使用的 spliced/unspliced assays。
 
 ## 1 · 加载与审计

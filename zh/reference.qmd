@@ -3,8 +3,6 @@ title: "SCOP 函数任务入口"
 description: "按输入、质控、整合、注释、高级分析、空间和可视化任务查找 SCOP 函数。"
 ---
 
-# SCOP 函数任务入口
-
 本页负责从研究任务路由到函数与教程；精确参数和当前上游文档请使用 [SCOP reference index](https://mengxu98.github.io/scop/reference/)。
 
 | 任务 | 主要函数 | 教程 |

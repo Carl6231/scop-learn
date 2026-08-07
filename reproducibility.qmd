@@ -3,8 +3,6 @@ title: "Reproduce the published evidence"
 description: "Exact runtime, seed, source H5 hash, checkpoints, manifests, generated figures, and rebuild commands for SCOP Learn."
 ---
 
-# Reproduce the published evidence
-
 ## Audited runtime
 
 - R 4.5.1

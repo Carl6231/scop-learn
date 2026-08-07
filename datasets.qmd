@@ -3,8 +3,6 @@ title: "Dataset atlas"
 description: "The real datasets used in SCOP Learn, their provenance, assays, sizes, and teaching roles."
 ---
 
-# Dataset atlas
-
 The main curriculum uses five real datasets bundled with SCOP plus one public 10x H5. Synthetic data is not primary teaching evidence.
 
 | Dataset | Shape | Assays / modality | Role |

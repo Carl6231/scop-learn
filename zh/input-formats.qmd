@@ -3,8 +3,6 @@ title: "不同单细胞文件怎么读取"
 description: "10x H5、10x 三件套、RDS、H5AD、Loom 和多样本输入的可执行读取方案。"
 ---
 
-# 不同单细胞文件怎么读取
-
 SCOP 不负责替代所有底层文件读取器。先用格式原生函数读取或转换成 Seurat，再进入 SCOP 流程。读取后立刻检查维度、稀疏性、feature 名称、barcode 唯一性、assay、layer 和元数据。
 
 ## 10x H5 {#x-h5}

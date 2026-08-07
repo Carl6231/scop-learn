@@ -3,8 +3,6 @@ title: "Read single-cell input formats"
 description: "Executable readers for 10x H5, 10x three-file directories, RDS, H5AD, Loom, and multi-sample inputs."
 ---
 
-# Read single-cell input formats
-
 SCOP does not replace every low-level file reader. Use the format-native reader, create or convert a Seurat object, then enter the SCOP workflow. Always inspect dimensions, sparsity, feature names, barcode uniqueness, assay names, and metadata immediately after reading.
 
 ## 10x H5 {#10x-h5}

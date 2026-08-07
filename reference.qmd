@@ -3,8 +3,6 @@ title: "SCOP function gateway"
 description: "A task-oriented gateway to SCOP input, QC, integration, annotation, advanced, spatial, and visualisation functions."
 ---
 
-# SCOP function gateway
-
 This page routes tasks to the relevant SCOP functions and tutorial chapters. For exact arguments and current upstream documentation, use the [SCOP reference index](https://mengxu98.github.io/scop/reference/).
 
 | Task | Main functions | Tutorial |

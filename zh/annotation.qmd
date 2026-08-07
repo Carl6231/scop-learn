@@ -3,8 +3,6 @@ title: "细胞注释：有哪些选择，如何取证"
 description: "在真实 PBMC 多组学数据上演示人工 marker、参考标签转移、SCOP CellTypist、SingleR 前提、置信度和冲突处理。"
 ---
 
-# 细胞注释：有哪些选择，如何取证
-
 实际案例使用 `pbmcmultiome_sub`：500 个真实 PBMC，含 RNA 与 peaks 两个 assays，自带 6 个数量近似平衡的粗粒度类型。
 
 ## 实用的证据阶梯

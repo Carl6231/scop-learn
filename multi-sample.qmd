@@ -3,8 +3,6 @@ title: "Multi-sample and cross-source integration"
 description: "How to QC, merge, integrate, validate, and model biological multi-sample studies and cross-dataset SCOP objects."
 ---
 
-# Multi-sample and cross-source integration
-
 Two situations look similar in code but support different conclusions.
 
 ## Biological multi-sample design {#biological-multi-sample-design}

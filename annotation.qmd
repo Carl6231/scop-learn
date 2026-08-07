@@ -3,8 +3,6 @@ title: "Cell annotation: choices and evidence"
 description: "Manual markers, reference transfer, SCOP CellTypist, SingleR prerequisites, uncertainty, and validation on real PBMC multiome data."
 ---
 
-# Cell annotation: choices and evidence
-
 The executed case uses `pbmcmultiome_sub`: 500 real PBMCs with RNA and peak assays, balanced across six broad bundled classes.
 
 ## A practical evidence ladder

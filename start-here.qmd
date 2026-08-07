@@ -3,8 +3,6 @@ title: "Start here"
 description: "Choose the correct SCOP Learn path for one sample, many samples, cross-dataset integration, annotation, or spatial transcriptomics."
 ---
 
-# Start here
-
 This course is organised around decisions you must make in a real project, not around an alphabetical function list.
 
 ## Choose your entry point

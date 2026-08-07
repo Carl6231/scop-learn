@@ -3,8 +3,6 @@ title: "Real spatial transcriptomics workflow"
 description: "A real human PanIN and mouse-brain Visium workflow covering spot QC, Moran features, spatial networks, neighbourhoods, and deconvolution boundaries."
 ---
 
-# Real spatial transcriptomics workflow
-
 This chapter uses two real SCOP datasets: 1,986 human PanIN Visium spots from GSM8058244 and 2,000 spots across two mouse-brain slices.
 
 ## 1 · Load and audit coordinate space

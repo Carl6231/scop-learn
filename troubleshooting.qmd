@@ -3,8 +3,6 @@ title: "Troubleshooting decision guide"
 description: "Evidence-based fixes for SCOP input, layer, QC, integration, annotation, optional backend, and spatial-coordinate failures."
 ---
 
-# Troubleshooting decision guide
-
 | Symptom | First evidence to inspect | Likely cause | Scoped response |
 |---|---|---|---|
 | `Read10X()` says barcodes missing | directory listing | missing `.gz`, wrong directory level, or renamed file | restore the standard three-file names and keep all three together |

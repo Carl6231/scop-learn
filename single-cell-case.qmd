@@ -3,8 +3,6 @@ title: "Real single-sample workflow"
 description: "A complete SCOP and Seurat workflow on the real pancreas_sub dataset: QC, doublets, layers, dimensions, cluster stability, UMAP, markers, and annotation checks."
 ---
 
-# Real single-sample workflow
-
 This chapter executes a full construction path on `scop::pancreas_sub`, a real mouse pancreatic endocrinogenesis subset with 15,998 features and 1,000 cells. The object also contains spliced and unspliced assays for later trajectory work.
 
 ## 1 · Load and audit

@@ -3,8 +3,6 @@ title: "Core concepts before code"
 description: "The sample, layer, integration, annotation, and inference concepts that prevent invalid single-cell conclusions."
 ---
 
-# Core concepts before code
-
 ## Cells are observations; samples are experimental units
 
 A matrix may contain 100,000 cells but only six patients. For a treatment or disease contrast, the effective replication is usually six biological samples—not 100,000 independent cells. Keep `sample_id`, `patient_id`, and `condition` throughout the object.

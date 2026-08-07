@@ -3,8 +3,6 @@ title: "Paper-scale analysis framework"
 description: "A reproducible figure, table, checkpoint, and claim framework for a complete single-cell paper using SCOP."
 ---
 
-# Paper-scale analysis framework
-
 This is a scaffold for a complete study—not a promise that every dataset can support every panel.
 
 ## Phase 0 · Lock the scientific design

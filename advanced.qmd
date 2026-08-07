@@ -3,8 +3,6 @@ title: "Advanced analysis by research question"
 description: "SCOP workflows for differential expression, enrichment, composition, trajectory, communication, regulation, metabolism, and malignancy."
 ---
 
-# Advanced analysis by research question
-
 Advanced functions are not a checklist. Select a module because it answers a predefined question and because its assumptions match the data.
 
 ## Differential expression and enrichment

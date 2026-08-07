@@ -1,5 +1,5 @@
 ---
-title: "SCOP Learn：用真实数据完成单细胞与空间分析"
+pagetitle: "SCOP Learn：用真实数据完成单细胞与空间分析"
 description: "基于 SCOP 0.8.9 自带真实数据集和公开 10x H5 文件的可执行双语教程。"
 ---
 

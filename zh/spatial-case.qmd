@@ -3,8 +3,6 @@ title: "真实空间转录组完整流程"
 description: "在真实人 PanIN 与小鼠脑 Visium 子集上完成 spot 质控、Moran 特征、空间网络、邻域和去卷积边界。"
 ---
 
-# 真实空间转录组完整流程
-
 本章使用两个真实 SCOP 数据集：GSM8058244 的 1,986 个 PanIN Visium spots，以及两个小鼠脑切片的 2,000 个 spots。
 
 ## 1 · 加载并审计坐标空间
