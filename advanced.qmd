@@ -1,6 +1,6 @@
 ---
 title: "Advanced analysis by research question"
-description: "SCOP advanced modules for differential expression, enrichment, composition, trajectory, communication, regulation, metabolism, malignancy, and multiome analysis."
+description: "SCOP workflows for differential expression, enrichment, composition, trajectory, communication, regulation, metabolism, and malignancy."
 ---
 
 # Advanced analysis by research question

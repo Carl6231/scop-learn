@@ -1,6 +1,6 @@
 ---
 title: "Real spatial transcriptomics workflow"
-description: "A complete SCOP spatial workflow on real human PanIN and mouse-brain Visium subsets, including spot QC, Moran features, spatial networks, neighbourhoods, and deconvolution boundaries."
+description: "A real human PanIN and mouse-brain Visium workflow covering spot QC, Moran features, spatial networks, neighbourhoods, and deconvolution boundaries."
 ---
 
 # Real spatial transcriptomics workflow
