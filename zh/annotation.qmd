@@ -1,49 +1,155 @@
 ---
-title: "细胞注释：有哪些选择，如何取证"
-description: "在真实 PBMC 多组学数据上演示人工 marker、参考标签转移、SCOP CellTypist、SingleR 前提、置信度和冲突处理。"
+title: "细胞注释：方法、证据与不确定性"
+description: "使用真实 PBMC multiome 数据，详细讲解 SCOP marker heatmap、reference transfer、CellTypist、SingleR 前提、consensus review 和不确定性。"
 ---
 
-实际案例使用 `pbmcmultiome_sub`：500 个真实 PBMC，含 RNA 与 peaks 两个 assays，自带 6 个数量近似平衡的粗粒度类型。
+注释不是一次函数调用，而是综合 marker programme、负向证据、reference 覆盖、模型词汇、置信度、组织背景与 doublet 状态的证据评审。实际案例使用 `pbmcmultiome_sub`：**500 个真实 PBMC**、配对 RNA/peaks assays 和六个宽泛自带类别。
 
-## 实用的证据阶梯
+::: {.learning-objectives}
+## 学习目标
 
-1. **cluster marker + 经典 marker：** 建立符合组织背景的基线。
-2. **参考标签转移：** 检查已有参考是否能解释 query。
-3. **预训练分类器：** 提供另一套标签词汇和置信度。
-4. **一致性审查：** 处理冲突、混合身份、稀有群和 unknown。
+你将学会：
 
-## 人工 marker 证据
+1. 区分 cluster annotation 与逐细胞 prediction；
+2. 建立正向和矛盾 marker panels；
+3. 用 SCOP `GroupHeatmap()` 可视化 marker 证据；
+4. 运行并评估 RNA reference transfer；
+5. 使用 `RunCellTypist()` 并保留原始词汇和置信度；
+6. 理解 `RunSingleR()` 与 `RunLabelTransfer()` 的适用条件；
+7. 建立含 unresolved labels 的可审计 consensus table。
+:::
+
+## 1 · 审计 query 并预先决定注释粒度
+
+::: {.input-contract}
+**输入合同**
+
+- 真实 `pbmcmultiome_sub` query；
+- 21,074 features × 500 cells；
+- 保留 `RNA` 和 `peaks` assays；
+- expression 方法使用 normalized RNA data；
+- 六个宽泛自带 labels 只用于方法评估；
+- 不假设外部 fine vocabulary 与宽标签一一对应。
+:::
 
 ```r
-data(pbmcmultiome_sub, package = "scop")
-DefaultAssay(pbmcmultiome_sub) <- "RNA"
-srt <- NormalizeData(pbmcmultiome_sub)
+library(scop)
+library(Seurat)
 
-markers <- c(
-  "MS4A1", "CD79A",             # B
-  "CD3D", "IL7R", "CD8A",     # T
-  "NKG7", "GNLY",              # NK
-  "LYZ", "S100A8", "FCGR3A",  # monocyte
-  "FCER1A"                       # DC
+data(pbmcmultiome_sub, package = "scop")
+srt <- pbmcmultiome_sub
+DefaultAssay(srt) <- "RNA"
+
+list(
+  dimensions = dim(srt),
+  assays = Assays(srt),
+  layers = Layers(srt[["RNA"]]),
+  labels = table(srt$CellType)
 )
-DotPlot(srt, features = markers, group.by = "CellType")
+
+srt <- NormalizeData(srt, assay = "RNA", verbose = FALSE)
 ```
 
-![真实配对 RNA/ATAC PBMC 的 marker dot plot。](../assets/figures/real-data/annotation-marker-evidence.png){fig-alt="dot plot 展示 B、CD4 T、CD8 T、DC、Mono 与 NK 的经典免疫 marker 表达。"}
+看 classifier 输出前先确定粒度。对 500 个 PBMC，B、CD4 T、CD8 T、DC、Mono、NK 等宽分类可以支持；非常精细的 memory/exhaustion 词汇可能细胞数不足或并不存在。
 
-单个 marker 往往不够：`NKG7` 不能独立区分 NK 和细胞毒性 T，`LYZ` 也不能独立分开 monocyte 与 DC。
+## 2 · 建立正向与负向 marker matrix
 
-## RNA 到 RNA 的参考标签转移
-
-通用 RNA 参考映射使用 Seurat anchors。真实测试把 PBMC 分层拆成 302 个 reference 和 198 个 held-out query：
+| 候选类型 | 正向证据 | 需要检查的矛盾证据 |
+|---|---|---|
+| B cell | `MS4A1`、`CD79A`、CD74/HLA-II programme | 强 `NKG7/GNLY` 或 myeloid programme |
+| CD4 T | `CD3D`、`IL7R`、T-cell programme | 强 B 或 myeloid programme |
+| CD8 T | `CD3D`、`CD8A`、必要时 cytotoxic genes | 缺乏 T-cell programme 或纯 NK programme |
+| NK | `NKG7`、`GNLY`、cytotoxic programme | 强 CD3/TCR programme |
+| monocyte | `LYZ`、`S100A8`、`FCGR3A` | 纯 lymphoid programme |
+| dendritic | `FCER1A`、antigen-presentation programme | 广泛 doublet-like 谱系冲突 |
 
 ```r
+marker_panel <- intersect(
+  c(
+    "MS4A1", "CD79A",
+    "CD3D", "IL7R", "CD8A",
+    "NKG7", "GNLY",
+    "LYZ", "S100A8", "FCGR3A",
+    "FCER1A"
+  ),
+  rownames(srt)
+)
+```
+
+```r
+marker_heatmap <- GroupHeatmap(
+  srt,
+  features = marker_panel,
+  group.by = "CellType",
+  assay = "RNA",
+  layer = "data",
+  exp_method = "zscore",
+  show_row_names = FALSE,
+  show_column_names = TRUE,
+  cluster_rows = FALSE,
+  cluster_columns = FALSE,
+  column_title = "Bundled CellType"
+)
+marker_heatmap$plot
+```
+
+![真实配对 RNA/ATAC PBMC 的 SCOP GroupHeatmap marker 证据。](../assets/figures/real-data/annotation-marker-evidence.png){fig-alt="SCOP grouped heatmap 展示六个 PBMC 自带类别中 B、T、NK、monocyte 和 dendritic canonical markers 的 z-score 表达。"}
+
+::: {.scop-native}
+**SCOP 原生图片证据：**由 `scop::GroupHeatmap()` 从真实 multiome 对象的 normalized RNA assay 生成；graphics device 只负责保存 SCOP 返回图片。
+:::
+
+应按 programme 阅读。`NKG7` 单基因不能区分 NK 与 cytotoxic T；`LYZ` 单基因不能区分 monocyte 与 DC；`S100A8` 也可能表示炎症状态。
+
+## 3 · 命名前先计算 cluster markers
+
+```r
+if (!"seurat_clusters" %in% colnames(srt[[]])) {
+  srt <- FindVariableFeatures(srt, nfeatures = 1500, verbose = FALSE)
+  srt <- ScaleData(srt, features = VariableFeatures(srt), verbose = FALSE)
+  srt <- RunPCA(srt, npcs = 20, verbose = FALSE)
+  srt <- FindNeighbors(srt, reduction = "pca", dims = 1:15, verbose = FALSE)
+  srt <- FindClusters(srt, resolution = 0.4, random.seed = 20260807, verbose = FALSE)
+  srt <- RunUMAP(srt, reduction = "pca", dims = 1:15,
+                 seed.use = 20260807, verbose = FALSE)
+}
+
+Idents(srt) <- "seurat_clusters"
+
+cluster_markers <- scop::FindAllMarkers(
+  srt,
+  assay = "RNA",
+  only.pos = TRUE,
+  min.pct = 0.2,
+  logfc.threshold = 0.25
+)
+```
+
+若没有可信 cluster，应先构建 neighbours 和 clusters。每个 cluster 的表要保留正向 markers、缺失预期 markers、矛盾 markers、检测比例和校正 P 值；只根据 top gene 注释不可审计。
+
+## 4 · 评估 RNA-to-RNA reference transfer
+
+实际检查将真实对象分成 **302 个 reference cells** 与 **198 个 held-out query cells**。
+
+```r
+set.seed(20260807)
+
+reference_cells <- unlist(tapply(
+  colnames(srt),
+  srt$CellType,
+  function(x) sample(x, ceiling(length(x) * 0.6))
+))
+
+reference <- subset(srt, cells = reference_cells)
+query <- subset(srt, cells = setdiff(colnames(srt), reference_cells))
+
 anchors <- FindTransferAnchors(
   reference = reference,
   query = query,
   reference.reduction = "pca",
   dims = 1:15
 )
+
 pred <- TransferData(
   anchorset = anchors,
   refdata = reference$CellType,
@@ -52,11 +158,17 @@ pred <- TransferData(
 query <- AddMetaData(query, pred)
 ```
 
-对自带粗粒度标签的 held-out 准确率为 **93.43%**，最大预测分数均值为 **0.9027**。这是同数据集内部方法检查，对真正外部队列通常会高估表现。
+```r
+mean(query$predicted.id == query$CellType)
+mean(query$prediction.score.max)
+table(truth = query$CellType, predicted = query$predicted.id)
+```
 
-`scop::RunLabelTransfer()` 主要面向 `ChromatinAssay`/multiome 转移，不应被当作通用 RNA-to-RNA wrapper。
+Held-out accuracy 为 **0.9343**，平均最大分数 **0.9027**。这是同一数据集、共有 preprocessing 和词汇下的检查，可能高估独立 cohort 性能。
 
-## 通过 SCOP 使用 CellTypist
+外部 transfer 前检查 reference 是否覆盖 query 组织、物种、技术和疾病状态；是否缺少 query populations；高分是否有 coherent markers；稀有 labels 是否有足够 reference cells；结果对 dims 和 reference subset 是否稳定。
+
+## 5 · 通过 SCOP 运行 CellTypist
 
 ```r
 srt <- RunCellTypist(
@@ -64,40 +176,136 @@ srt <- RunCellTypist(
   assay = "RNA",
   layer = "data",
   model = "Immune_All_Low.pkl",
-  majority_voting = FALSE
+  majority_voting = FALSE,
+  insert_labels = TRUE,
+  insert_conf = TRUE,
+  prefix = "celltypist_",
+  verbose = FALSE
 )
+
 table(srt$celltypist_predicted_labels)
 summary(srt$celltypist_conf_score)
 ```
 
-真实运行匹配了 5,361 个基因，产生 19 个细粒度免疫标签，置信度中位数 **0.9977**。模型的细粒度词汇与 6 个粗标签并非一一对应，因此本站不强行制造一个误导性的准确率。
+真实运行匹配 **5,361 genes**，返回 **19 个细免疫 labels**，置信度中位数 **0.9977**。模型词汇比六个宽标签更细，因此本站没有在看见答案后强行合并标签来制造 accuracy。
 
-## SingleR
+高置信度只表示模型在自己的 vocabulary 中更偏好一个标签，不证明词汇适合该组织，也不证明细胞生物学纯净。
+
+::: {.checkpoint}
+**检查点 1——原始注释候选**
+
+Consensus 修改前，保存 manual candidates、reference prediction/score、CellTypist label/confidence、原 clusters、doublet flags 和未改变的 query 对象。
+:::
+
+## 6 · SingleR 需要合适的带标签 reference
 
 ```r
-# 需要 SingleR 和带标签、且生物学合适的 Seurat 参考
 srt <- RunSingleR(
   srt_query = srt,
   srt_ref = reference_object,
-  ref_group = "label.main"
+  query_group = "seurat_clusters",
+  ref_group = "label.main",
+  query_assay = "RNA",
+  ref_assay = "RNA",
+  fine.tune = TRUE,
+  prune = TRUE,
+  cores = 4
 )
 ```
 
-审计运行时未安装 `SingleR` 和 `celldex`，因此不宣称已有结果。安装成功也不等于参考选择正确。
+审计环境缺少 `SingleR` 和 `celldex`，所以没有展示结果。不能因为 `celldex` reference 方便就直接使用；要检查组织、物种、粒度、疾病背景、年龄和覆盖。
 
-## 明确处理冲突和不确定性
-
-建议保留独立字段：
+## 7 · 理解 multiome 的 `RunLabelTransfer()`
 
 ```r
-srt$annotation_manual
-srt$annotation_transfer
-srt$annotation_celltypist
-srt$annotation_final
-srt$annotation_confidence
-srt$annotation_note
+atac_query <- RunLabelTransfer(
+  srt = atac_query,
+  reference = rna_reference,
+  assay = "peaks",
+  method = "Seurat",
+  reference_assay = "RNA",
+  reference_reduction = "pca",
+  reference_dims = 1:30,
+  reference_label = "cell_type",
+  add_gene_activity = TRUE,
+  evaluate = TRUE,
+  truth_col = "CellType",
+  seed = 20260807
+)
 ```
 
-当证据冲突时保留 `uncertain_T_NK`、`mixed` 或 `unknown`，不要为了图例整齐而强制命名。最终标签要同时通过 marker、丰度、组织背景、cluster 一致性和双细胞标记的核对。
+该 SCOP 函数适用于 Seurat/scOMM transfer，特别是 ChromatinAssay query 需要 RNA labels 或 gene activity 的情况。不能把它描述成所有 RNA-to-RNA mapping 的通用 wrapper；实际 RNA held-out 检查使用 Seurat anchors。
 
-逐 cluster 共识表至少应包含：cluster、正向 markers、矛盾 markers、reference prediction/score、CellTypist label/confidence、final label、uncertainty flag 和 reviewer note。本站证据记录了方法级输出；新研究必须用自己的 cluster 证据填表，不能复制自带 truth labels。
+## 8 · 建立逐 cluster consensus table
+
+| 字段 | 含义 |
+|---|---|
+| `cluster` | 稳定 cluster ID |
+| `n_cells` | 大小和稀有度背景 |
+| `positive_markers` | 支持的 marker programme |
+| `contradictory_markers` | 反对候选的证据 |
+| `transfer_label` / `transfer_score` | reference 结果 |
+| `celltypist_label` / `celltypist_confidence` | classifier 结果 |
+| `doublet_fraction` | 混合群体警报 |
+| `final_label` | 审核后标签 |
+| `uncertainty` | 不确定性等级 |
+| `review_note` | 决策理由 |
+
+```r
+consensus <- data.frame(
+  cluster = levels(Idents(srt)),
+  n_cells = as.integer(table(Idents(srt))),
+  positive_markers = NA_character_,
+  contradictory_markers = NA_character_,
+  transfer_label = NA_character_,
+  transfer_score = NA_real_,
+  celltypist_label = NA_character_,
+  celltypist_confidence = NA_real_,
+  doublet_fraction = NA_real_,
+  final_label = NA_character_,
+  uncertainty = "unresolved",
+  review_note = NA_character_
+)
+```
+
+证据冲突时使用 `uncertain_T_NK`、`mixed_myeloid` 或 `unknown`。不能总用最高数字分数消除冲突。
+
+## 9 · 验证最终 labels
+
+重新检查正向/矛盾 marker programmes、`CellDimPlot()` 上 cluster coherence、跨 sample/batch 分布、doublet/低质量富集、out-of-reference 群体、合理聚类/reference 改变下的稳定性以及 fine labels 的统计样本量。
+
+```r
+group_fields <- "annotation_final"
+if ("sample_id" %in% colnames(srt[[]])) {
+  group_fields <- c(group_fields, "sample_id")
+}
+
+CellDimPlot(
+  srt,
+  group.by = group_fields,
+  reduction = "umap",
+  show_stat = FALSE,
+  raster = FALSE
+)
+```
+
+## 常见失败
+
+| 现象 | 原因 | 处理 |
+|---|---|---|
+| 所有细胞都有高置信标签 | 模型 vocabulary 封闭 | 检查 unknown/out-of-reference 证据 |
+| T 与 NK 互换 | 共享 cytotoxic programme | 同时要求 CD3/TCR 与 NK 证据 |
+| 稀有类只在一个 batch | artefact 或 batch-specific biology | 检查 QC、markers、重复和 reference |
+| marker 与 classifier 冲突 | 状态、doublet 或 reference mismatch | 保留冲突并调查 |
+| `RunLabelTransfer()` 要求 ChromatinAssay | RNA query 选错路径 | 使用 RNA anchors 或正确 assay |
+| SingleR vocabulary 太宽 | reference 不合适 | 更换 reference 或保留宽/unknown 标签 |
+
+::: {.exercise}
+## 练习
+
+选择一个 PBMC 类型，定义至少三个正向 markers、两个矛盾 programmes、一个 reference-transfer 前提和一个保留 `unknown` 的理由，然后写出批准该 label 前必须完成的 consensus row。
+:::
+
+::: {.boundary}
+自动注释只产生候选。最终标签需要 marker coherence、适当 reference 覆盖、组织背景、不确定性和人工审核。对象自带 `CellType` 仅用于内部评估，不证明外部泛化。
+:::

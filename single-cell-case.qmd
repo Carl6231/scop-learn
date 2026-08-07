@@ -1,13 +1,41 @@
 ---
 title: "Real single-sample workflow"
-description: "A complete SCOP and Seurat workflow on the real pancreas_sub dataset: QC, doublets, layers, dimensions, cluster stability, UMAP, markers, and annotation checks."
+description: "A detailed, restartable SCOP workflow on the real pancreas_sub dataset, from object audit and QC through clustering, dimensions, markers, annotation hand-off, and checkpoints."
 ---
 
-This chapter executes a full construction path on `scop::pancreas_sub`, a real mouse pancreatic endocrinogenesis subset with 15,998 features and 1,000 cells. The object also contains spliced and unspliced assays for later trajectory work.
+This chapter constructs one analysis-ready object from `scop::pancreas_sub`, a real mouse pancreatic endocrinogenesis subset with **15,998 features and 1,000 cells**. It contains RNA, spliced, and unspliced assays. The RNA assay supports the construction workflow; the spliced assays make a later dynamics analysis possible, but do not by themselves prove a trajectory.
 
-## 1 · Load and audit
+::: {.learning-objectives}
+## Learning outcomes
+
+After this chapter you should be able to:
+
+1. audit a Seurat object before changing it;
+2. separate QC metrics, doublets, ambient RNA, and filtering decisions;
+3. preserve an explicit exclusion table rather than silently subsetting;
+4. join Seurat v5 layers at the correct point;
+5. choose dimensions and clustering resolution from diagnostics;
+6. create the main QC and embedding figures with SCOP plotting functions;
+7. save a restartable checkpoint and a minimal evidence bundle.
+:::
+
+## 1 · Define the question and input contract
+
+The construction question is: *can this real object pass a transparent QC and clustering path that preserves the bundled developmental cell classes?* It is not: *can this teaching subset establish a new developmental discovery?*
+
+::: {.input-contract}
+**Input contract**
+
+- one Seurat object with integer RNA counts;
+- unique feature and cell names;
+- `RNA`, `spliced`, and `unspliced` assays present;
+- bundled `CellType` retained only for an internal validation check;
+- no assumption that a pre-existing reduction or cluster is correct;
+- seed `20260807`, R 4.5.1, SCOP 0.8.9, Seurat 5.5.0.
+:::
 
 ```r
+options(scop_env_init = FALSE)
 library(scop)
 library(Seurat)
 
@@ -15,16 +43,59 @@ set.seed(20260807)
 data(pancreas_sub, package = "scop")
 srt <- pancreas_sub
 DefaultAssay(srt) <- "RNA"
-
-dim(srt)
-Assays(srt)
-table(srt$CellType)
 ```
 
-## 2 · Measure QC and call doublets
+Audit structure before processing:
+
+```r
+stopifnot(inherits(srt, "Seurat"))
+stopifnot(!anyDuplicated(rownames(srt)), !anyDuplicated(colnames(srt)))
+
+list(
+  dimensions = dim(srt),
+  assays = Assays(srt),
+  layers = lapply(Assays(srt), function(a) Layers(srt[[a]])),
+  reductions = Reductions(srt),
+  graphs = Graphs(srt),
+  metadata = colnames(srt[[]]),
+  cell_types = table(srt$CellType)
+)
+```
+
+Do not delete existing reductions yet. Record them, then use distinct names for regenerated results so that provenance remains visible.
+
+## 2 · Calculate QC metrics before thresholds
+
+Mitochondrial percentage is species-sensitive. The executed mouse object uses `^mt-`; many human objects use `^MT-`.
 
 ```r
 srt[["percent.mt"]] <- PercentageFeatureSet(srt, pattern = "^mt-")
+
+summary(srt$nFeature_RNA)
+summary(srt$nCount_RNA)
+summary(srt$percent.mt)
+```
+
+Observed medians were **2,441 detected genes**, **6,190 UMIs**, and **0.6943% mitochondrial reads**. These values describe this subset; they do not define universal cutoffs.
+
+Use SCOP to draw the distributions:
+
+```r
+FeatureStatPlot(
+  srt,
+  stat.by = c("nFeature_RNA", "nCount_RNA", "percent.mt"),
+  layer = "counts",
+  plot_type = "violin",
+  ncol = 3,
+  legend.position = "none"
+)
+```
+
+## 3 · Call doublets per sample
+
+The verified default in this case is `db_scDblFinder()`. It must receive raw counts and should be run separately for each biological sample in a multi-sample study.
+
+```r
 srt <- db_scDblFinder(
   srt,
   assay = "RNA",
@@ -32,61 +103,147 @@ srt <- db_scDblFinder(
   verbose = FALSE
 )
 
-VlnPlot(srt, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"))
-table(srt$db.scDblFinder_class)
+table(srt$db.scDblFinder_class, useNA = "ifany")
 ```
 
-Observed medians were 2,441 detected genes, 6,190 UMIs, and 0.6943% mitochondrial reads. `db_scDblFinder()` called 21 doublets.
-
-![QC distributions before and after the recorded thresholds.](assets/figures/real-data/single-qc.png){fig-alt="Violin plots compare detected genes and mitochondrial percentage before and after QC in real mouse pancreas cells."}
-
-The chosen thresholds fit this dataset’s observed range:
+The real run called **21 doublets**. SCOP also provides `RunDoubletCalling()` as a common interface for supported methods:
 
 ```r
-keep <- with(srt[[]],
-  db.scDblFinder_class == "singlet" &
-  nFeature_RNA >= 1000 & nFeature_RNA <= 5000 &
-  percent.mt < 5
+# Choose one method after checking its backend and assumptions.
+srt_alt <- RunDoubletCalling(
+  srt,
+  assay = "RNA",
+  db_method = "scDblFinder",
+  db_rate = 0.01
 )
-srt <- subset(srt, cells = rownames(srt[[]])[keep])
 ```
 
-This retained **979/1,000 cells (97.9%)**. The thresholds are recorded evidence, not universal defaults.
+Do not combine several callers by taking every positive call unless that rule was defined before seeing the result. Compare score distributions, class counts, cross-lineage marker combinations, and sensitivity of downstream clusters.
 
-The exclusion audit is explicit: 21 doublets; 0 cells below 1,000 or above 5,000 detected genes; 0 cells at or above 5% mitochondrial reads; 21 unique cells excluded. Reasons are reported separately because they can overlap in other datasets.
+### Doublets are not ambient RNA
 
-### Doublets and ambient RNA are different problems
-
-`db_scDblFinder()` is the verified default here. `RunDoubletCalling()` can route other supported callers when their dependencies and assumptions fit; compare score/class columns and run per sample. Ambient contamination is not solved by removing doublets: inspect suspicious cross-lineage markers and use `RunDecontX()` only with raw counts, suitable batches/background, and before/after marker checks.
-
-## 3 · Join layers and construct the embedding
+A doublet contains transcriptomes from more than one captured cell. Ambient RNA is extracellular RNA entering droplets. Removing doublets does not remove ambient contamination. When raw counts and a meaningful batch/background definition exist, SCOP exposes:
 
 ```r
-srt <- JoinLayers(srt)
+srt_decont <- RunDecontX(
+  srt,
+  assay = "RNA",
+  group.by = "CellType",
+  assay_name = "decontXcounts",
+  store_assay = TRUE,
+  seed = 20260807
+)
+```
+
+That code is a decision path, not an executed result in this chapter. Validate decontamination by comparing known markers, background genes, total counts, and biological structure before and after; do not choose a method merely because it produces a cleaner UMAP.
+
+## 4 · Write the filtering rule and reason table
+
+The thresholds below were chosen after inspecting this object:
+
+```r
+qc <- srt[[]]
+
+reason <- data.frame(
+  cell = rownames(qc),
+  doublet = qc$db.scDblFinder_class != "singlet",
+  low_features = qc$nFeature_RNA < 1000,
+  high_features = qc$nFeature_RNA > 5000,
+  high_mito = qc$percent.mt >= 5
+)
+
+reason$exclude <- with(
+  reason,
+  doublet | low_features | high_features | high_mito
+)
+
+colSums(reason[, c("doublet", "low_features", "high_features", "high_mito", "exclude")])
+keep_cells <- reason$cell[!reason$exclude]
+srt_filtered <- subset(srt, cells = keep_cells)
+```
+
+The executed exclusion audit is:
+
+| Reason | Cells |
+|---|---:|
+| scDblFinder doublet | 21 |
+| fewer than 1,000 detected genes | 0 |
+| more than 5,000 detected genes | 0 |
+| mitochondrial percentage at least 5% | 0 |
+| unique excluded cells | 21 |
+| retained cells | **979/1,000 (97.9%)** |
+
+Reasons can overlap in another dataset, so the sum of individual reasons need not equal the unique excluded count.
+
+![SCOP FeatureStatPlot output before and after the recorded filtering decision.](assets/figures/real-data/single-qc.png){fig-alt="Four SCOP violin panels compare detected genes and mitochondrial percentage before and after filtering in real mouse pancreas cells."}
+
+::: {.scop-native}
+**SCOP-native figure provenance:** generated from the real `pancreas_sub` object by `scop::FeatureStatPlot()` and saved without redrawing the data with another plotting API. Manifest: `single-qc.png`.
+:::
+
+## 5 · Join layers and choose normalization
+
+Join Seurat v5 split layers before downstream functions that expect one counts/data layer:
+
+```r
+srt <- JoinLayers(srt_filtered)
+Layers(srt[["RNA"]])
+```
+
+For a clean single sample, log normalization is sufficient for this construction demonstration:
+
+```r
 srt <- NormalizeData(srt, verbose = FALSE)
 srt <- FindVariableFeatures(srt, nfeatures = 2000, verbose = FALSE)
 srt <- ScaleData(srt, features = VariableFeatures(srt), verbose = FALSE)
 srt <- RunPCA(srt, features = VariableFeatures(srt), npcs = 30, verbose = FALSE)
 ```
 
-## 4 · Test clustering resolution
+Use `SCTransform()` when its count-depth model and downstream SCT workflow fit the study. Do not add Harmony to a single sample simply because integration is available.
+
+::: {.checkpoint}
+**Checkpoint 1 — QC-complete object**
+
+Save an object only after confirming: one RNA counts layer, one normalized data layer, 979 retained cells, unique names, the doublet column, the reason table on disk, and unchanged `CellType` metadata.
+:::
+
+## 6 · Test clustering resolution
+
+Build neighbours once, then compare several resolutions on the same graph:
 
 ```r
 srt <- FindNeighbors(srt, dims = 1:20, verbose = FALSE)
-srt <- FindClusters(srt, resolution = c(0.2, 0.4, 0.8), verbose = FALSE)
+srt <- FindClusters(
+  srt,
+  resolution = c(0.2, 0.4, 0.8),
+  random.seed = 20260807,
+  verbose = FALSE
+)
+
+cluster_cols <- grep(
+  "RNA_snn_res",
+  colnames(srt[[]]),
+  value = TRUE
+)
 
 ClusterTreePlot(
   srt,
-  cluster_cols = grep("RNA_snn_res", colnames(srt[[]]), value = TRUE),
+  cluster_cols = cluster_cols,
   title = "Resolution stability on real mouse pancreas"
 )
 ```
 
-![Cluster tree across resolutions 0.2, 0.4, and 0.8.](assets/figures/real-data/single-cluster-tree.png){fig-alt="Cluster tree shows stable and splitting clusters across three resolutions in the real pancreas dataset."}
+![SCOP ClusterTreePlot across resolutions 0.2, 0.4, and 0.8.](assets/figures/real-data/single-cluster-tree.png){fig-alt="SCOP cluster tree shows stable and splitting clusters across three resolutions in the real pancreas object."}
 
-Resolution 0.4 produced seven clusters and provides an interpretable middle point. A cluster tree does not choose resolution automatically; it shows where subdivisions appear.
+::: {.scop-native}
+**SCOP-native figure provenance:** `scop::ClusterTreePlot()` on the filtered real object. Resolution 0.4 produced seven clusters and was retained as an interpretable middle point. The tree visualizes splits; it does not select a biologically correct resolution automatically.
+:::
 
-## 5 · Estimate usable dimensions and run UMAP
+Check each proposed resolution against marker coherence, minimum cluster size, doublet enrichment, sample composition, and whether a split answers the biological question.
+
+## 7 · Estimate usable dimensions
+
+`RunDimsEstimate()` stores the selected dimension count; `DimsEstimatePlot()` exposes the evidence behind it.
 
 ```r
 dims <- RunDimsEstimate(
@@ -96,39 +253,107 @@ dims <- RunDimsEstimate(
   min_dims = 5,
   verbose = FALSE
 )
-srt <- RunUMAP(srt, dims = dims, seed.use = 20260807, verbose = FALSE)
+
+DimsEstimatePlot(
+  srt,
+  reduction = "pca",
+  max_pcs = 30,
+  title = "Evidence for PC selection"
+)
 ```
 
 The executed ensemble estimate selected PCs **1–11**.
 
-![UMAP of real mouse pancreatic cells coloured by bundled CellType.](assets/figures/real-data/single-umap.png){fig-alt="UMAP shows ductal, endocrine, Ngn3-high endocrine progenitor, Ngn3-low endocrine progenitor, and pre-endocrine cells."}
+![SCOP DimsEstimatePlot for the real pancreas PCA.](assets/figures/real-data/single-dims-estimate.png){fig-alt="SCOP dimension diagnostic shows explained variance bars, cumulative variance, and a selected-PC line at PC 11."}
 
-## 6 · Find markers and propose labels
+::: {.scop-native}
+**SCOP-native figure provenance:** generated by `scop::DimsEstimatePlot()` from the PCA stored in the real filtered object.
+:::
+
+Now create a new UMAP from the selected PCs:
+
+```r
+srt <- RunUMAP(
+  srt,
+  reduction = "pca",
+  dims = seq_len(dims),
+  reduction.name = "umap",
+  seed.use = 20260807,
+  verbose = FALSE
+)
+
+CellDimPlot(
+  srt,
+  group.by = "CellType",
+  reduction = "umap",
+  show_stat = FALSE,
+  pt.size = 0.65,
+  raster = FALSE
+)
+```
+
+![SCOP CellDimPlot of real mouse pancreatic cells coloured by bundled CellType.](assets/figures/real-data/single-umap.png){fig-alt="SCOP UMAP shows ductal, endocrine, Ngn3-high endocrine progenitor, Ngn3-low endocrine progenitor, and pre-endocrine cells."}
+
+::: {.scop-native}
+**SCOP-native figure provenance:** generated by `scop::CellDimPlot()` from the new real-data UMAP. The bundled labels are displayed for validation; they were not rediscovered by this plotting call.
+:::
+
+## 8 · Find markers and prepare annotation evidence
+
+Use the resolution chosen above, not whichever identity happens to be active:
 
 ```r
 Idents(srt) <- srt$RNA_snn_res.0.4
-markers <- FindAllMarkers(
-  srt, assay = "RNA", only.pos = TRUE,
-  min.pct = 0.2, logfc.threshold = 0.25
+
+markers <- scop::FindAllMarkers(
+  srt,
+  assay = "RNA",
+  only.pos = TRUE,
+  min.pct = 0.2,
+  logfc.threshold = 0.25
 )
 
-top_by_cluster <- markers |>
+markers <- markers[order(markers$p_val_adj, -markers$avg_log2FC), ]
+top10 <- markers |>
   dplyr::group_by(cluster) |>
   dplyr::slice_min(p_val_adj, n = 10)
 ```
 
-For an internal check only, mapping each cluster to its majority bundled `CellType` agrees for **83.25%** of retained cells. This is not independent validation: the known labels come from the same bundled object.
+Marker tests describe clusters; they do not establish patient-level condition effects. A marker table should retain cluster, gene, fold change, detection fractions, adjusted P value, method, assay, layer, and filtering parameters.
 
-## 7 · Save a restartable checkpoint
+For an internal check, mapping each cluster to its majority bundled `CellType` agreed for **83.25%** of retained cells. Because the known labels come from the same object, this is concordance—not independent validation.
+
+## 9 · Save a restartable evidence bundle
 
 ```r
+dir.create("checkpoints", showWarnings = FALSE)
+dir.create("results", showWarnings = FALSE)
+
 saveRDS(srt, "checkpoints/03_clustered_pancreas.rds")
-write.csv(markers, "results/cluster_markers.csv", row.names = FALSE)
+write.csv(reason, "results/qc-exclusion-reasons.csv", row.names = FALSE)
+write.csv(markers, "results/cluster-markers.csv", row.names = FALSE)
 writeLines(capture.output(sessionInfo()), "results/session-info.txt")
 ```
 
-Next, use [cell annotation](annotation.qmd) to combine marker and reference evidence, or use the spliced/unspliced assays for a properly justified [trajectory analysis](advanced.qmd#trajectory-and-dynamics).
+Record SHA-256 hashes for the checkpoint, marker table, and published figures. A successful R call is not enough if the saved object, table, and image cannot be matched later.
 
-::: {.result-note}
-**Result you can defend:** the real object passes a documented QC and doublet path, has stable structure across tested resolutions, and recovers the bundled developmental cell classes. **Result you cannot claim:** a new developmental discovery from this teaching subset.
+## Failure modes and decisions
+
+| Symptom | Inspect first | Do next |
+|---|---|---|
+| almost every cell is a doublet | raw counts, sample size, expected rate | rerun per sample; verify counts and backend version |
+| `percent.mt` is all zero | feature-name case and species | change the mitochondrial pattern deliberately |
+| no `data` layer after `JoinLayers()` | `Layers()` output | run the chosen normalization; do not pretend counts are normalized |
+| tiny clusters appear only at 0.8 | cluster tree, size, markers, doublets | merge or retain as uncertain unless independent evidence supports them |
+| `RunDimsEstimate()` chooses an implausible value | PCA variance and stored reduction | verify the reduction name and compare scree/intrinsic methods |
+| UMAP changes between runs | seed, packages, selected PCs | lock seed and versions; compare graph/markers, not pixel positions alone |
+
+::: {.exercise}
+## Practice task
+
+Change only one decision: test resolution 0.6 while keeping the same cells, PCA, neighbours, and seed. Report (a) cluster count, (b) smallest cluster size, (c) which 0.4 cluster split, and (d) whether the new children have distinct positive and contradictory markers. Do not choose 0.6 because the UMAP looks more separated.
+:::
+
+::: {.boundary}
+**Defensible result:** the real object passes a documented doublet/QC path, retains 979 cells, has interpretable resolution stability, selects 11 PCs from a diagnostic, and recovers the bundled developmental classes. **Not defensible:** a new developmental discovery or patient-level inference from this teaching subset.
 :::

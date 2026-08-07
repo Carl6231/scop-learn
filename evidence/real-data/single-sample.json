@@ -42,21 +42,29 @@
   "figures": {
     "qc": {
       "path": "assets/figures/real-data/single-qc.png",
-      "sha256": "7088a8b44d7de0e282ea2a9d89331c33a4a202071bd9da54b759ada2b82bbfdd"
+      "sha256": "ddde7bcc210adca0b100f1e55e8094a647de6e76c4afc7735fe8be2840366bff",
+      "plot_function": "scop::FeatureStatPlot"
     },
     "umap": {
       "path": "assets/figures/real-data/single-umap.png",
-      "sha256": "4c707faa64c6a0458c9b19bce5ebd626d94f6ee40edfa240f9f119cfc314e342"
+      "sha256": "0030caaa122ea1872c10712df6731e5b85629df95f861b40286bc9b6c2c4d511",
+      "plot_function": "scop::CellDimPlot"
     },
     "cluster_tree": {
       "path": "assets/figures/real-data/single-cluster-tree.png",
-      "sha256": "a54aee0d086341447a17c89453b2e443ee6de9768d46b46e73a395f197c519b3"
+      "sha256": "a54aee0d086341447a17c89453b2e443ee6de9768d46b46e73a395f197c519b3",
+      "plot_function": "scop::ClusterTreePlot"
+    },
+    "dims_estimate": {
+      "path": "assets/figures/real-data/single-dims-estimate.png",
+      "sha256": "c24f33accbeb6f5e9c79e3da861455e86e4a5360a369466b1081d17d0400876c",
+      "plot_function": "scop::DimsEstimatePlot"
     }
   },
   "checkpoint": {
     "path": "artifacts/real-data/checkpoints/single-pancreas.rds",
-    "sha256": "2770d574c455a7e5d7e7c5e4ff4794ba90ba808e68de35be730f331e07173908",
-    "bytes": 31676097
+    "sha256": "87992b4513e04c713167c1427035131b2fa048203f8be8681452cb1f023c3dc8",
+    "bytes": 31676182
   },
   "claim_boundary": "Cluster-majority accuracy is an internal concordance check against bundled labels, not independent biological validation."
 }

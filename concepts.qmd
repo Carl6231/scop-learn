@@ -1,45 +1,234 @@
 ---
 title: "Core concepts before code"
-description: "The sample, layer, integration, annotation, and inference concepts that prevent invalid single-cell conclusions."
+description: "A detailed conceptual contract for experimental units, counts and layers, QC, integration, clustering, annotation, differential expression, and spatial mixtures."
 ---
 
-## Cells are observations; samples are experimental units
+Most serious single-cell errors are not syntax errors. They arise when a cell is treated as a patient, normalized values are treated as counts, a batch field is confused with a condition, or a visualization is interpreted as a statistical result. This chapter defines the contracts used by every later SCOP lesson.
 
-A matrix may contain 100,000 cells but only six patients. For a treatment or disease contrast, the effective replication is usually six biological samples—not 100,000 independent cells. Keep `sample_id`, `patient_id`, and `condition` throughout the object.
+::: {.learning-objectives}
+## Learning outcomes
 
-## QC is a distributional decision
+You will learn to:
 
-Compute QC metrics first, view them per sample, then choose and record thresholds. Mitochondrial percentage, detected genes, UMI count, doublet score, ambient RNA, and outlier rules answer different failure modes. A universal `percent.mt < 20` line is not a quality-control strategy.
+1. distinguish cells, libraries, samples, patients, batches, and dataset sources;
+2. know when counts, normalized data, scaled data, reductions, and graphs are valid inputs;
+3. treat QC and integration as evidence-based decisions;
+4. separate clusters, cell identities, and transient states;
+5. match differential-expression methods to the experimental design;
+6. keep spot-level spatial results separate from cell-resolved claims.
+:::
 
-## Seurat v5 layers must be deliberate
+## 1 · Cells are observations; samples are experimental units
 
-Merged objects can retain split layers. Join them before functions that expect one counts/data layer:
+Suppose a study contains 60,000 cells from six patients, three per condition. A cell-level table has 60,000 rows, but the treatment comparison usually has **six independent biological units**. Cells from one patient share tissue, processing, genetics, environment, and technical history; they are not 10,000 independent patients.
+
+| Field | Meaning | Example | May be the independent unit? |
+|---|---|---|---|
+| `cell_barcode` | droplet/cell observation | `S01_AAAC...` | no |
+| `library_id` | sequencing library | `LIB01` | only if each biological sample has one independent library and design supports it |
+| `sample_id` | biological specimen | `S01` | usually |
+| `patient_id` | donor/subject | `P01` | yes; required for paired/repeated designs |
+| `condition` | biological contrast | control/treated | no; it labels units |
+| `batch` | unwanted processing source | chemistry date | no; it is a covariate/correction target |
+| `dataset` / `technology` | public source or platform | smart-seq2 | usually not |
 
 ```r
+design <- unique(srt[[]][c("sample_id", "patient_id", "condition", "batch")])
+stopifnot(!anyDuplicated(design$sample_id))
+table(design$condition)
+table(design$condition, design$batch)
+```
+
+If each condition occurs in only one batch, condition and batch are confounded. No integration algorithm can recover information that the study never observed.
+
+## 2 · Assays and layers answer different questions
+
+In a Seurat v5 object:
+
+- `counts` should contain non-negative raw or count-like values;
+- `data` usually contains normalized expression;
+- `scale.data` contains transformed/scaled values for selected features;
+- an `SCT` assay stores SCTransform results and has its own model contract;
+- `integrated` or latent reductions are for shared representation, not raw-count inference;
+- `spliced` and `unspliced` assays have alignment requirements for dynamics;
+- `peaks` is a different modality and needs ATAC-specific processing.
+
+```r
+assay_map <- lapply(Assays(srt), function(a) {
+  list(class = class(srt[[a]]), layers = Layers(srt[[a]]))
+})
+assay_map
+```
+
+Use counts for count-based QC, contamination/doublets where required, pseudobulk, and many generative models. Use normalized data for marker visualization and many scoring methods. Use scaled data/reductions for PCA, clustering, and visualization according to the method contract. Never infer a layer from its numeric appearance alone; record its provenance.
+
+## 3 · Seurat v5 split layers must be deliberate
+
+Merging samples can produce `counts.S01`, `counts.S02`, and related layers. These preserve source boundaries and are not automatically an error. Before a function that expects one counts/data layer, inspect and join at the planned construction point:
+
+```r
+Layers(srt[[DefaultAssay(srt)]])
 srt <- JoinLayers(srt)
 Layers(srt[[DefaultAssay(srt)]])
 ```
 
-## Integration is a correction with a risk
+Do not join before you have completed source-specific audits if you still need to trace a failed sample. After joining, verify cell counts, total counts, sample metadata, and barcode uniqueness.
 
-Integration aims to reduce unwanted source variation while preserving biology. Validate both sides:
+## 4 · QC is a distributional decision
 
-- **source mixing** should improve when source is unwanted;
-- **cell-type or condition structure** should remain coherent;
-- markers should remain biologically interpretable;
-- the target biological contrast must not be supplied as the batch variable.
+QC metrics answer different failure modes:
 
-## Annotation is evidence synthesis
+| Metric | Main warning | Why one universal threshold fails |
+|---|---|---|
+| `nFeature_RNA` | empty droplets or unusually complex multiplets | expected complexity varies by tissue/chemistry |
+| `nCount_RNA` | low-depth cells or high-count multiplets | depth varies across samples |
+| mitochondrial percentage | damaged/stressed cells | baseline differs by tissue/species |
+| ribosomal/haemoglobin percentage | composition or contamination signal | may be real biology in some tissues |
+| doublet score/class | two-cell droplets | rate depends on loading and cell count |
+| ambient-RNA estimate | soup contamination | gene- and sample-specific |
+| robust outlier score | multivariate/sample-specific anomaly | distribution changes across populations |
 
-No single automated label is ground truth. Combine canonical markers, cluster markers, reference mapping, model confidence, tissue context, and doublet/low-quality signals. Keep uncertain and mixed labels instead of forcing every cell into a confident class.
+Measure first, visualize per sample, define thresholds, record retained counts and exclusion reasons, then rerun the same plots. A line such as `percent.mt < 20` without sample distributions and tissue context is not a QC strategy.
 
-## Differential expression follows the design
+QC also has a biological risk: strict thresholds can remove a genuinely fragile disease population. Inspect marker and sample composition before interpreting filtered results.
 
-- Cluster markers explain a cluster and may use cell-level tests.
-- Exploratory state markers compare cells and must be labelled exploratory.
-- Study-level condition inference should aggregate counts to `sample × cell type` and fit a sample-level model.
-- A dataset-source contrast is not a disease contrast.
+## 5 · Doublets and ambient RNA are different problems
 
-## Spatial spots are mixtures
+A doublet contains signal from more than one captured cell; ambient RNA adds extracellular transcripts to otherwise valid droplets. Doublet calling does not decontaminate expression, and decontamination does not identify all doublets.
 
-Visium spots can contain several cells. Spatial domains, Moran features, neighbourhood associations, and deconvolution have different interpretations. Do not call a spot-level label a cell type without a cell-resolved method and appropriate evidence.
+In the construction contract, run doublet assessment per library on raw counts, review lineage conflicts and scores, then decide whether ambient-RNA modelling is justified. Preserve original counts or an immutable checkpoint so corrected assays never erase the evidence.
+
+## 6 · Normalization and integration solve different problems
+
+Normalization makes expression more comparable within the model’s assumptions. Integration constructs a representation intended to reduce unwanted source effects. Integration is not required merely because there is more than one sample.
+
+Use integration when:
+
+- sources share biological populations;
+- an explicit technical variable drives unwanted separation;
+- the biological contrast is not identical to the batch variable;
+- pre/post diagnostics can test mixing and biology preservation.
+
+Avoid or stop integration when:
+
+- condition is perfectly confounded with batch;
+- sources have almost no shared populations;
+- the separation is the biological signal of interest;
+- markers or known trajectories disappear after correction.
+
+The required two-sided validation is:
+
+1. unwanted source mixing improves;
+2. cell-type/condition neighbourhoods and marker programmes remain coherent.
+
+A well-mixed UMAP alone cannot prove successful integration because UMAP is a visualization of a chosen representation.
+
+## 7 · Dimensions, neighbours, clusters, and UMAP are distinct
+
+PCA or another linear/latent reduction defines a feature space. A dimension-selection procedure chooses how much of it to use. A neighbour graph connects cells in that space. Clustering partitions the graph. UMAP displays a nonlinear projection.
+
+Changing any one of these can change the apparent result. Record:
+
+```r
+list(
+  reduction = "pca",
+  dimensions = 1:20,
+  graph = "RNA_snn",
+  resolution = 0.4,
+  umap_seed = 20260807
+)
+```
+
+Use SCOP `RunDimsEstimate()` to provide dimension evidence and `ClusterTreePlot()` to examine resolution stability. Do not choose dimensions or resolution solely because a UMAP looks visually separated.
+
+## 8 · A cluster is not automatically a cell type
+
+Clusters can represent cell type, subtype, state, cell cycle, stress, batch, depth, doublets, or a mixture. Annotation therefore combines:
+
+- positive marker programmes;
+- contradictory/negative evidence;
+- cluster markers and detection percentages;
+- reference transfer and confidence;
+- tissue and species context;
+- sample distribution;
+- QC/doublet enrichment;
+- uncertainty and reviewer notes.
+
+Keep `cluster_id`, `annotation_candidate`, `annotation_final`, and `annotation_confidence` as separate fields. Never replace the cluster ID with a biological label and lose the audit trail.
+
+## 9 · Differential expression follows the design
+
+There are three different tasks:
+
+| Task | Typical unit/model | Allowed interpretation |
+|---|---|---|
+| cluster-marker discovery | cells within the constructed object | genes that distinguish a cluster in this object |
+| exploratory state comparison | cells, explicitly exploratory | candidate state-associated genes |
+| study-level condition contrast | pseudobulk `sample × cell type`, sample-level model | condition-associated expression with biological replication |
+
+For the study-level path:
+
+```r
+stopifnot(all(c("sample_id", "cell_type", "condition") %in% colnames(srt[[]])))
+table(srt$sample_id, srt$cell_type)
+```
+
+Aggregate raw counts, retain the sample design, fit condition and justified covariates, and report effect sizes plus uncertainty. A million cells from one treated and one control specimen still provide one specimen per group.
+
+## 10 · Enrichment and scores inherit upstream assumptions
+
+Enrichment does not rescue an invalid DEG design. A pathway score is not automatically pathway activation. Check:
+
+- input list/ranking and direction;
+- identifier mapping and gene universe;
+- database and version;
+- gene coverage;
+- correlation with depth, stress, and cell cycle;
+- leading-edge genes and redundancy.
+
+The biological conclusion cannot be stronger than the statistic supplied to the pathway method.
+
+## 11 · Spatial spots are mixtures in coordinates
+
+Visium spots may include several cells. Keep these result types separate:
+
+| Result | Meaning | Not equivalent to |
+|---|---|---|
+| spot QC | measurement quality by coordinate | cell QC |
+| spatially variable gene | expression associated with spatial structure | cell-type-specific gene |
+| domain label | region/spot class | one cell identity |
+| neighbourhood association | adjacent domain/spot tendency | direct molecular interaction |
+| deconvolution proportion | reference-dependent mixture estimate | observed cell count |
+| spatial communication | expression-and-distance hypothesis | functional signalling proof |
+
+Coordinates also have a scale and orientation. Pixel, array row/column, and transformed coordinates cannot be mixed silently.
+
+## 12 · Reproducibility is more than a seed
+
+A complete checkpoint includes data checksum, object hash, sample sheet, code/commit, function arguments, random seed, R/package versions, optional backends/databases, result tables, and rendered figures. A seed does not control external database updates or every cross-platform numerical difference.
+
+::: {.checkpoint}
+**Concept checkpoint**
+
+Before the first downstream analysis, you should be able to answer: What is the independent unit? Which layer contains counts? Which variable is technical? Is integration identifiable? What evidence defines each label? What claim can the selected statistical model support? Is a spatial result spot-level or cell-resolved?
+:::
+
+## Common reasoning failures
+
+| Statement | Why it fails | Correct replacement |
+|---|---|---|
+| “We have 50,000 replicates because we have 50,000 cells.” | cells share samples | report cell count and independent sample count separately |
+| “Harmony removed batch because the UMAP mixed.” | visualization alone is insufficient | report mixing and biology-preservation diagnostics |
+| “Cluster 7 is a T cell because CD3D is high.” | one marker and one cluster are not identity proof | review a programme, contradictions, context, and reference evidence |
+| “The pathway is activated.” | transcript enrichment is indirect | state that a gene programme is enriched/scored |
+| “The Visium spot is a macrophage.” | spots are mixtures | state a macrophage-enriched label or deconvolution estimate |
+
+::: {.exercise}
+## Practice task
+
+Draw a five-row data dictionary for your project: `cell_barcode`, `sample_id`, `patient_id`, `condition`, and `batch`. Add one sentence defining the independent unit, the counts layer, the integration variable, and the strongest allowed condition claim. If condition and batch are confounded, write “not identifiable” rather than choosing an algorithm.
+:::
+
+::: {.boundary}
+These concepts are analysis gates. Passing them does not guarantee a biological conclusion, but violating them can invalidate one even when every function runs without error.
+:::

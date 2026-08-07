@@ -1,70 +1,187 @@
 ---
-title: "多样本与跨数据来源整合"
-description: "生物学多样本和跨公开数据集如何分别质控、合并、整合、验证和统计建模。"
+title: "多样本与跨来源整合"
+description: "详细讲解样本表、逐样本 QC、merge 与 integration 选择、真实 panc8 Harmony 评估、pseudobulk 设计和跨研究停止规则。"
 ---
 
-两种场景代码相似，但能支持的结论完全不同。
+“多个对象”可能代表同一研究的生物学重复、一个样本的多个技术文库，或互不相关的公共数据集。代码都可能从 `merge()` 开始，但可支持的结论完全不同。本章先区分设计，再讨论整合。
 
-## 生物学多样本 {#生物学多样本}
+::: {.learning-objectives}
+## 学习目标
 
-当 `sample_id` 表示独立患者、动物或实验单位时使用此路线。先分样本计算和查看质控：
+你将学会：
 
-审计运行时的 SCOP 自带教程对象没有真正的 condition × patient 重复设计，因此本节是可执行设计模板，不宣称已有条件比较结果；下面真实 `panc8_sub` 运行只用于技术来源整合。
+1. 读取矩阵前建立并验证 sample sheet；
+2. 按生物学样本运行 QC 和 doublet calling；
+3. 保留 patient、sample、condition、batch、technology、dataset 身份；
+4. 在 merge、Harmony、CCA、RPCA、scVI 和 reference mapping 中选择；
+5. 整合前发现 condition–batch 混杂；
+6. 定量评估技术混合与生物信号保留；
+7. 回到 raw counts 进行 sample-level pseudobulk 推断。
+:::
+
+## 1 · 先判断你拥有什么设计
+
+| 设计 | 独立单位 | 常见目标 | 整合可以做什么 | 整合不能做什么 |
+|---|---|---|---|---|
+| 同一研究多个患者/动物 | 患者或动物 | 估计条件效应 | 降低不需要的技术差异 | 创造缺失的生物学重复 |
+| 一个样本多个文库 | 样本，不是文库 | 增加覆盖或检查技术一致性 | 对齐文库效应 | 把文库变成患者 |
+| 多个公共数据集 | 研究/数据集 | 构建 atlas 或映射共有状态 | 协调共有细胞群 | 消除 protocol 与 biology 混杂 |
+| reference + query | query 样本 | 转移标签或定位 query | 映射到 reference 空间 | 把 reference 变成实验对照 |
+
+当前 SCOP 自带教学对象中没有真实 condition-by-patient 重复研究。因此生物学多样本部分是完整设计模板；实际执行的 `panc8_sub` 只作为**技术跨来源整合案例**。
+
+## 2 · 建立并锁定 sample sheet {#biological-multi-sample-design}
+
+::: {.input-contract}
+**最小 sample-sheet 合同**
+
+| 字段 | 含义 | 是否唯一 |
+|---|---|---|
+| `sample_id` | 独立文库/样本 ID | 是 |
+| `patient_id` | 供体或动物 ID | 重复测量时可重复 |
+| `condition` | 主要生物对比 | 否 |
+| `batch` | 不需要的处理批次 | 否 |
+| `dataset` | 来源研究 | 否 |
+| `technology` | 10x v2/v3、Smart-seq2 等 | 否 |
+| `file_path` | 输入位置 | 每行唯一 |
+| `species` / `genome` | 参考身份 | 否 |
+:::
 
 ```r
-objects <- SplitObject(merged, split.by = "sample_id")
+samples <- read.csv("sample-sheet.csv", stringsAsFactors = FALSE)
+
+required <- c(
+  "sample_id", "patient_id", "condition", "batch",
+  "dataset", "technology", "file_path", "species", "genome"
+)
+stopifnot(all(required %in% colnames(samples)))
+stopifnot(!anyDuplicated(samples$sample_id))
+stopifnot(all(file.exists(samples$file_path)))
+
+with(samples, table(condition, batch))
+with(samples, table(patient_id, condition))
+```
+
+如果所有病例都在 batch A、所有对照都在 batch B，设计已完全混杂。任何整合算法都无法识别差异来自 condition 还是 batch。应停止、补数据或缩小结论。
+
+## 3 · 每个样本独立读取与审计
+
+```r
+objects <- lapply(seq_len(nrow(samples)), function(i) {
+  counts <- Read10X(samples$file_path[i])
+  if (is.list(counts)) counts <- counts[["Gene Expression"]]
+
+  x <- CreateSeuratObject(
+    counts,
+    project = samples$sample_id[i],
+    min.cells = 0,
+    min.features = 0
+  )
+
+  x$sample_id <- samples$sample_id[i]
+  x$patient_id <- samples$patient_id[i]
+  x$condition <- samples$condition[i]
+  x$batch <- samples$batch[i]
+  x$dataset <- samples$dataset[i]
+  x$technology <- samples$technology[i]
+  x
+})
+names(objects) <- samples$sample_id
+```
+
+QC 前创建逐样本审计表：
+
+```r
+input_audit <- do.call(rbind, lapply(names(objects), function(id) {
+  x <- objects[[id]]
+  data.frame(
+    sample_id = id,
+    genes = nrow(x),
+    cells = ncol(x),
+    total_umi = sum(GetAssayData(x, assay = "RNA", layer = "counts")),
+    duplicate_genes = anyDuplicated(rownames(x)),
+    duplicate_cells = anyDuplicated(colnames(x))
+  )
+}))
+```
+
+不同 gene ID 版本、物种、genome build 或 feature type 必须在 merge 前协调。不能静默取交集；应报告原始、映射、共有、one-to-many 和丢弃 features。
+
+## 4 · 按样本运行 QC
+
+```r
 objects <- lapply(objects, function(x) {
   x[["percent.mt"]] <- PercentageFeatureSet(x, pattern = "^MT-")
+
   RunCellQC(
-    x, assay = "RNA",
-    qc_metrics = c("umi", "gene", "mito", "outlier"),
-    return_filtered = FALSE
+    x,
+    assay = "RNA",
+    return_filtered = FALSE,
+    qc_metrics = c("doublets", "outlier", "umi", "gene", "mito"),
+    db_method = "scDblFinder",
+    UMI_threshold = 1000,
+    gene_threshold = 500,
+    mito_threshold = 20,
+    seed = 20260807
   )
 })
 ```
 
-记录每个样本的细胞数、分布和保留率。某个样本丢失 80% 细胞是研究层面警报，不能用全局阈值掩盖。
+上面的数值是占位符，必须根据逐样本分布修改。Study-level retention table 应包含输入细胞、各排除原因、唯一排除数、保留数、保留比例、gene/UMI/mito 中位数和样本 QC 状态。
 
-完成有记录的过滤和双细胞检测后：
+`RunCellQC()` 返回列会随指标和 SCOP 版本改变，应检查 metadata 而不是盲目复制列名。一个样本丢失 80% 细胞是研究层面的警报，不能被 pooled distribution 隐藏。
+
+::: {.checkpoint}
+**检查点 1——逐样本 QC**
+
+每个样本保存一个 QC 完成 RDS，再保存一个总 retention 表。不能先 merge，之后再尝试重建每个样本的删除原因。
+:::
+
+## 5 · Merge 时保留全部身份
 
 ```r
-srt <- merge(objects[[1]], y = objects[-1], add.cell.ids = names(objects))
+srt <- merge(
+  objects[[1]],
+  y = objects[-1],
+  add.cell.ids = names(objects)
+)
 srt <- JoinLayers(srt)
-srt <- SCTransform(srt, assay = "RNA", vst.flavor = "v2", verbose = FALSE)
+
+stopifnot(all(c(
+  "sample_id", "patient_id", "condition", "batch",
+  "dataset", "technology"
+) %in% colnames(srt[[]])))
+table(srt$sample_id, srt$condition)
 ```
 
-只有 batch 是不需要的技术差异，且没有与主要研究变量完全混杂时才整合：
+Merge 只是把细胞放入同一个对象，并不等于去除 batch。平衡研究应先构建 uncorrected representation，再决定是否需要整合。
+
+## 6 · 标准化与整合选择
+
+```r
+srt <- SCTransform(
+  srt,
+  assay = "RNA",
+  new.assay.name = "SCT",
+  vst.flavor = "v2",
+  variable.features.n = 2000,
+  verbose = FALSE
+)
+```
+
+| 方法 | 适用情况 | 主要风险 | 必查证据 |
+|---|---|---|---|
+| 不整合 | 平衡单技术或生物差异占主导 | 残余技术差异 | 匹配细胞类型内的样本混合 |
+| `Harmony_integrate()` | 共有群体和明确不需要的 batch/source | 过度校正 | 保留 condition 与 marker |
+| `CCA_integrate()` | 相关数据集间共有结构 | 强行连接弱共有群体 | anchors 覆盖和稀有细胞 |
+| `RPCA_integrate()` | 相关大数据的保守 anchors | 校正不足 | 残余 source 结构 |
+| `scVI_integrate()` | 细胞数足够且有非线性模型理由 | backend/version 敏感 | held-out 与 biology preservation |
+| reference mapping | 稳定 atlas + 新 query | reference vocabulary 偏差 | unknown 与低分 query |
 
 ```r
 srt <- Harmony_integrate(
   srt_merge = srt,
   batch = "batch",
-  assay = "SCT",
-  normalization_method = "SCT",
-  do_normalization = FALSE,
-  HVF = VariableFeatures(srt),
-  linear_reduction_dims_use = 1:20,
-  harmony_dims_use = 1:20,
-  seed = 20260807
-)
-```
-
-## 跨数据来源整合 {#跨数据来源整合}
-
-实际案例 `panc8_sub` 有 1,600 个胰腺细胞，来自 8 个公开数据来源，每个正好 200 个细胞，覆盖 5 种技术。
-
-```r
-data(panc8_sub, package = "scop")
-srt <- JoinLayers(panc8_sub)
-srt <- SCTransform(
-  srt, assay = "RNA", new.assay.name = "SCT",
-  vst.flavor = "v2", variable.features.n = 2000,
-  verbose = FALSE
-)
-
-srt <- Harmony_integrate(
-  srt_merge = srt,
-  batch = "dataset",
   assay = "SCT",
   normalization_method = "SCT",
   do_normalization = FALSE,
@@ -79,33 +196,119 @@ srt <- Harmony_integrate(
 )
 ```
 
-![panc8 真实细胞在 Harmony 前后的变化。](../assets/figures/real-data/cross-source-integration.png){fig-alt="三幅图比较 Harmony 前的来源分离、Harmony 后的来源混合和 Harmony 后的细胞类型结构。"}
+当 `condition` 是研究效应时，不能把它作为 Harmony batch variable。
 
-## 同时验证“去除”和“保留”
+## 7 · 实际执行的跨来源案例 {#cross-source-integration}
 
-根据每个细胞 20 个最近邻计算：
+`panc8_sub` 包含 **1,600 个胰腺细胞**，八个公共来源各 200 个，覆盖五种技术。
 
-| 指标 | 整合前 | 整合后 |
-|---|---:|---:|
-| 来自其他数据来源的近邻比例 | 0.2169 | **0.6765** |
-| 与已知 cell type 相同的近邻比例 | 0.9379 | **0.9616** |
+```r
+data(panc8_sub, package = "scop")
+cross <- JoinLayers(panc8_sub)
 
-cluster 多数标签与自带 cell type 的一致率为 **96.81%**。这说明该例中技术来源混合改善，已知细胞类型结构没有被抹掉。
+cross <- SCTransform(
+  cross,
+  assay = "RNA",
+  new.assay.name = "SCT",
+  vst.flavor = "v2",
+  variable.features.n = 2000,
+  verbose = FALSE
+)
 
-## 多数据集合并决策
+cross <- Harmony_integrate(
+  srt_merge = cross,
+  batch = "dataset",
+  assay = "SCT",
+  normalization_method = "SCT",
+  do_normalization = FALSE,
+  do_HVF_finding = FALSE,
+  HVF = VariableFeatures(cross),
+  do_scaling = FALSE,
+  linear_reduction_dims = 30,
+  linear_reduction_dims_use = 1:20,
+  harmony_dims_use = 1:20,
+  nonlinear_reduction = "umap",
+  cluster_resolution = 0.4,
+  seed = 20260807
+)
+```
 
-| 情况 | 建议 |
-|---|---|
-| 同一技术的多个样本 | 分别读取、逐样本 QC、merge，再判断是否需要整合 |
-| 同组织不同技术 | 统一 feature ID，保留 `dataset`/`tech`，整合并双向验证 |
-| 组织或生物学不兼容 | 不强迫构建共同 atlas；分开分析或映射到共同参考 |
-| condition 与 batch 完全混杂 | 任何算法都无法补回缺失设计；停止或缩小结论 |
-| 有标注参考和新 query | 做标签转移，不要为了转名字而盲目 merge |
+```r
+CellDimPlot(
+  cross,
+  group.by = c("dataset", "celltype"),
+  reduction = "HarmonyUMAP2D",
+  show_stat = FALSE,
+  raster = FALSE
+)
+```
 
-## 整合后的差异分析
+![SCOP CellDimPlot 对真实 panc8 Harmony 前后进行审计。](../assets/figures/real-data/cross-source-integration.png){fig-alt="SCOP panels 比较 Harmony 前的来源分离、Harmony 后的来源混合和已知细胞类型结构。"}
 
-整合 embedding 用于近邻、聚类和可视化；pseudobulk 必须回到原始 RNA counts，按 `sample_id × cell_type` 聚合并以生物学样本拟合模型。不能把细胞数当患者重复数。
+::: {.scop-native}
+**SCOP 原生图片证据：**三幅图都来自真实 `panc8_sub` checkpoint 上的 `scop::CellDimPlot()`；patchwork 只排列 SCOP 返回的图片。
+:::
+
+## 8 · 同时验证校正和保留
+
+证据构建器比较每个细胞 Harmony 前后 20 个近邻：
+
+| 指标 | Before | After | 期望方向 |
+|---|---:|---:|---|
+| 来自其他技术来源的 neighbours | 0.2169 | **0.6765** | source 不需要时上升 |
+| 相同自带 cell type 的 neighbours | 0.9379 | **0.9616** | 保持较高 |
+| cluster-majority 与自带 cell type 一致率 | — | **0.9681** | 保持较高 |
+
+该组合支持技术混合改善，同时保留已知细胞类型结构，但不能证明所有生物信号都保留。新研究还要比较匹配细胞类型内 condition、canonical markers、稀有群体、cluster sizes、sample entropy 和差异分析敏感性。
+
+以下情况应拒绝或限制整合：condition 与 batch 混杂、marker 消失、无关类型合并、稀有群体消失、混合指标仅因全部结构坍塌而改善，或无法从 versioned checkpoint 重建。
+
+## 9 · 整合后的组成与 pseudobulk
+
+Integrated reduction 用于 neighbours 和可视化；sample-level inference 回到 RNA raw counts。
+
+```r
+counts <- GetAssayData(srt, assay = "RNA", layer = "counts")
+aggregate_key <- interaction(srt$sample_id, srt$cell_type, drop = TRUE)
+pseudobulk <- t(rowsum(t(as.matrix(counts)), group = aggregate_key))
+
+design <- model.matrix(~ batch + condition, data = pseudobulk_metadata)
+```
+
+具有生物学重复时可使用：
+
+```r
+srt <- RunPropeller(
+  srt,
+  group.by = "cell_type",
+  split.by = "condition",
+  sample.by = "sample_id",
+  comparison = c("case", "control"),
+  seed = 20260807
+)
+```
+
+不能把 cell 数当 replicate 数。`panc8_sub` 的 pseudobulk 按 `dataset × celltype` 聚合；dataset 是技术来源，所以只能验证方法，不能做群体疾病推断。
+
+## 10 · 输出与故障诊断
+
+保存不可变 sample sheet 及哈希、逐样本 QC checkpoints、retention/exclusion 表、merge 前后对象、feature mapping 报告、SCOP 图片、mixing/biology metrics、pseudobulk counts/design、session info 和 manifest。
+
+| 失败 | 证据 | 决策 |
+|---|---|---|
+| 一个样本支配全部 clusters | cell counts 与 retention | downsampling 可改善图，但不能修复失败样本 |
+| batches 仍分离 | 匹配 cell type 图 | 可能是真实 biology 或缺少 overlap，不能强制混合 |
+| 校正后 cell types 坍塌 | markers 与 preservation score | 减弱或拒绝整合 |
+| design matrix 奇异 | `condition × batch` | 停止推断模型 |
+| 每组只有一个 pseudobulk | sample count | 只报告描述结果 |
+| merge 后 genes 消失 | feature mapping | 修复 ID 并从 sample checkpoint 重建 |
+
+::: {.exercise}
+## 练习
+
+为一个六样本研究建立 sample sheet：三例病例、三例对照、分布在两个平衡 batch；再建立完全混杂版本。展示两个 `condition × batch` 表，并解释为什么 Harmony 参数无法修复混杂设计。
+:::
 
 ::: {.boundary}
-`panc8_sub` 的 8 个来源是技术数据集，不是 8 位患者。它们可以验证整合和细胞类型信号，不能支持人群层面的结论。
+`panc8_sub` 的八个来源是技术数据集，不是八位患者。它们可以验证整合和已知 cell-type 保留，不能支持患者、群体或疾病效应。
 :::

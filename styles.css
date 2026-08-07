@@ -22,6 +22,14 @@ body {
 .evidence-card { border-left: 4px solid #d97745; background: #fffaf6; }
 .version-chip { display: inline-flex; padding: 0.3rem 0.6rem; border-radius: 999px; color: #17445c; background: #dff1fa; font-size: 0.78rem; font-weight: 750; }
 .boundary { padding: 1rem 1.15rem; border-left: 4px solid #d97745; background: #fff4ec; }
+.learning-objectives, .input-contract, .checkpoint, .exercise, .scop-native { margin: 1.2rem 0; padding: 1rem 1.15rem; border: 1px solid #d8e2ec; border-radius: 0.8rem; background: #fff; }
+.learning-objectives { border-left: 4px solid #2563eb; background: #eff6ff; }
+.input-contract { border-left: 4px solid #7c3aed; background: #f5f3ff; }
+.checkpoint { border-left: 4px solid #0f766e; background: #f0fdfa; }
+.exercise { border-left: 4px solid #b45309; background: #fffbeb; }
+.scop-native { border-left: 4px solid #15803d; background: #f0fdf4; color: #14532d; }
+.learning-objectives > :first-child, .input-contract > :first-child, .checkpoint > :first-child, .exercise > :first-child, .scop-native > :first-child { margin-top: 0; }
+.learning-objectives > :last-child, .input-contract > :last-child, .checkpoint > :last-child, .exercise > :last-child, .scop-native > :last-child { margin-bottom: 0; }
 .figure-caption { color: #526276; font-size: 0.9rem; }
 figcaption { color: #394b61; }
 .proof-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); gap: 0.8rem; margin: 1.2rem 0 2rem; }

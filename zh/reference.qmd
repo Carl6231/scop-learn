@@ -1,44 +1,205 @@
 ---
-title: "SCOP 函数任务入口"
-description: "按输入、质控、整合、注释、高级分析、空间和可视化任务查找 SCOP 函数。"
+title: "SCOP 函数学习入口"
+description: "按任务查找 SCOP 0.8.9 runners、plotters、required inputs、output locations、教程与本地验证命令。"
 ---
 
-本页负责从研究任务路由到函数与教程；精确参数和当前上游文档请使用 [SCOP reference index](https://mengxu98.github.io/scop/reference/)。
+本页是学习 gateway，不替代 upstream help。它将 research task 映射到 **runner**、**SCOP-native plotter**、object contract 和详细教程。Exact arguments 以本机 installed package help 为准。
 
-| 任务 | 主要函数 | 教程 |
-|---|---|---|
-| 自带数据/转换 | `LoadScopDataset()`、`FetchH5()`、`h5ad_to_srt()`、`loom_to_srt()` | [输入](input-formats.qmd) |
-| 细胞 QC | `RunCellQC()`、`db_scDblFinder()`、`RunDecontX()` | [单样本](single-cell-case.qmd) |
-| spot QC | `RunSpotQC()` | [空间](spatial-case.qmd) |
-| 整合 | `Harmony_integrate()`、`CCA_integrate()`、`RPCA_integrate()`、`scVI_integrate()` | [多样本](multi-sample.qmd) |
-| 维度选择 | `RunDimsEstimate()` | [单样本](single-cell-case.qmd) |
-| 聚类稳定性 | `ClusterTreePlot()` | [单样本](single-cell-case.qmd) |
-| marker / DEG | `FindMarkers()`、`FindAllMarkers()` | [单样本](single-cell-case.qmd)、[高级](advanced.qmd) |
-| 注释 | `RunCellTypist()`、`RunSingleR()`、`RunLabelTransfer()` | [注释](annotation.qmd) |
-| 富集 | `RunEnrichment()`、`RunGSEA()` | [高级](advanced.qmd) |
-| 比例 | `RunPropeller()`、`RunProportionTest()` | [高级](advanced.qmd) |
-| 轨迹 | `RunPAGA()`、`RunCytoTRACE()` | [高级](advanced.qmd) |
-| 通讯 | `RunCellChat()`、`RunSpatialCellChat()` | [高级](advanced.qmd) |
-| 调控/代谢 | `RunSCENIC()`、`RunMetabolism()` | [高级](advanced.qmd) |
-| 恶性/表型 | `RunCNV()`、`RunScissor()` | [高级](advanced.qmd) |
-| 空间特征/图 | `RunSpatialVariableFeatures()`、`RunSpatialNetwork()`、`RunSpatialNeighborhood()` | [空间](spatial-case.qmd) |
-| 去卷积/整合 | `RunRCTD()`、`RunSpatialIntegration()` | [空间](spatial-case.qmd) |
+::: {.learning-objectives}
+## 学习目标
 
-## 如何选择整合方法
+你将学会：
 
-| 方法 | 适用情况 | 关键前提 |
-|---|---|---|
-| Harmony | 有共享细胞状态，需要高效批次校正 | 正确 batch 字段和 biology preservation 验证 |
-| CCA | 多数据集存在共享相关结构 | 共同 features 和足够群体重叠 |
-| RPCA | 相关大数据集的保守 anchor 整合 | 各数据内部 PCA 和共同群体 |
-| scVI | 需要非线性潜变量且数据量足够 | 可工作的 Python 后端与版本锁定 |
+1. 按 biological task 而不是函数名查找 SCOP；
+2. 配对 runner 与 SCOP plotter；
+3. 确认 assay/layer、metadata、reduction、backend 或 reference；
+4. 复制代码前本地验证 exports/signatures；
+5. 将 function call 记录为 reproducible evidence。
+:::
 
-## 在本机确认函数
+## 1 · Runtime 与本地验证
+
+Published runtime 的 SCOP 0.8.9 有 **314 exports**。
 
 ```r
-"Harmony_integrate" %in% getNamespaceExports("scop")
+library(scop)
+packageVersion("scop")
+exports <- sort(getNamespaceExports("scop"))
+length(exports)
+"Harmony_integrate" %in% exports
 args(scop::Harmony_integrate)
 help("Harmony_integrate", package = "scop")
 ```
 
-本站运行时有 314 个导出函数。如果你的版本不同，以本机 help 与版本为准，并记录差异。
+```r
+verify_scop_function <- function(name) {
+  stopifnot(name %in% getNamespaceExports("scop"))
+  list(
+    package_version = as.character(packageVersion("scop")),
+    name = name,
+    signature = args(getExportedValue("scop", name))
+  )
+}
+verify_scop_function("RunDimsEstimate")
+```
+
+若本机 signature 不同，按 local help 修改并记录 version difference，不能从函数名猜 wrapper。
+
+::: {.input-contract}
+**函数调用合同**
+
+记录 input checkpoint、assay/layer、reduction/dimensions、group/sample fields、reference/database/model、backend、完整 arguments、seed、result location、plotter、output table 和 allowed claim。
+:::
+
+## 2 · Input/data access/conversion
+
+| 任务 | SCOP | 输入 | 输出/下一步 | 教程 |
+|---|---|---|---|---|
+| named collection | `LoadScopDataset()` | dataset/collection/cache | object/path；审计 source/hash | [输入](input-formats.qmd) |
+| H5 + metadata | `FetchH5()` | files + assay/layer | Seurat；证明 metadata join | [输入](input-formats.qmd) |
+| H5AD | `h5ad_to_srt()` | H5AD + `zellkonverter` | 验证 `.X`/layers/obs/var | [输入](input-formats.qmd#h5ad-and-loom) |
+| Loom | `loom_to_srt()` | Loom + `loomR` | 验证 spliced/unspliced | [输入](input-formats.qmd#h5ad-and-loom) |
+
+10x H5/三件套先使用 Seurat readers，这是有意设计；object contract 通过后进入 SCOP。
+
+## 3 · Cell/spot QC
+
+| 任务 | Runner | Plotter | 合同 | 教程 |
+|---|---|---|---|---|
+| cell QC | `RunCellQC()` | `FeatureStatPlot()` | raw counts、species-aware、per-sample | [单样本](single-cell-case.qmd) |
+| doublet path | `db_scDblFinder()` | SCOP QC plots | per-library raw counts | [单样本](single-cell-case.qmd) |
+| general doublet | `RunDoubletCalling()` | relevant SCOP plot | method/rate/counts | [单样本](single-cell-case.qmd) |
+| contamination | `RunDecontX()` | before/after SCOP plot | original counts + background contract | [单样本](single-cell-case.qmd) |
+| spot QC | `RunSpotQC()` | `FeatureStatPlot()` / spatial plot | Spatial assay + coordinate/image | [空间](spatial-case.qmd) |
+
+函数返回成功不替你选择 threshold。保存 before/after distributions 与 retained counts/sample。
+
+## 4 · Construction/integration/dimensions/clustering
+
+| 任务 | Function | 最低输入 | 验证 |
+|---|---|---|---|
+| Harmony | `Harmony_integrate()` | technical `batch`、assay、normalization | mixing + biology preservation |
+| CCA | `CCA_integrate()` | shared features/populations | anchors + preservation |
+| RPCA | `RPCA_integrate()` | within-source PCA | conservative correction |
+| scVI | `scVI_integrate()` | counts/sample/Python | env/version + latent diagnostics |
+| dimensions | `RunDimsEstimate()` | valid reduction | `DimsEstimatePlot()` |
+| cluster stability | `ClusterTreePlot()` | multiple resolution columns | transitions across grid |
+| embedding | `CellDimPlot()` | reduction/group fields | SCOP-native display |
+
+默认 order：`db_scDblFinder()` → `JoinLayers()` → multi-resolution / `ClusterTreePlot()` → 有依据时 SCT+integration → `RunDimsEstimate()`。
+
+| Method | 适合 | 前提 | 停止条件 |
+|---|---|---|---|
+| Harmony | shared states + technical source | batch field | biology erased/confounding |
+| CCA | correlated shared structure | common features | unlike populations anchored |
+| RPCA | large related datasets | within-PCA | no shared populations |
+| scVI | nonlinear latent model | Python/counts | backend instability/poor preservation |
+
+Executable Harmony 参数见[多样本](multi-sample.qmd)。
+
+## 5 · Markers 与 annotation
+
+| 任务 | Runner | Plot/evidence | 必须审核 |
+|---|---|---|---|
+| cluster markers | `FindMarkers()` / `FindAllMarkers()` | `GroupHeatmap()` 等 SCOP expression plot | positive/negative programmes |
+| CellTypist | `RunCellTypist()` | labels/confidence + marker/embedding | vocabulary/tissue/unknown |
+| SingleR | `RunSingleR()` | prediction/pruning + markers | suitable reference/packages |
+| RNA/ATAC transfer | `RunLabelTransfer()` | prediction/evaluation | assay class/reference/gene activity |
+
+Classifier confidence 不等于 truth。分开保存 candidate、score、final、uncertainty、review note。详见[注释](annotation.qmd)。
+
+## 6 · DEG/enrichment/composition
+
+| 问题 | Runner | Plotter | Statistical unit |
+|---|---|---|---|
+| 展示 valid DEG | external/SCOP table | `VolcanoPlot()` | 继承 DEG model |
+| over-representation | `RunEnrichment()` | `EnrichmentPlot()` | 继承 list/design |
+| ranked enrichment | `RunGSEA()` | `GSEAPlot()` | 继承 ranking/design |
+| proportions | `RunPropeller()` | `ProportionTestPlot()` path | biological sample |
+| general proportion | `RunProportionTest()` | `ProportionTestPlot()` | inferential 时是 sample |
+
+Plotter 不能修复 pseudo-replication。Condition contrast 前先建立 sample-level design。详见[高级](advanced.qmd)。
+
+## 7 · Trajectory/dynamics
+
+| 目的 | Runner | Plotter | 前提 |
+|---|---|---|---|
+| connectivity/pseudotime | `RunPAGA()` | `PAGAPlot()` | group/reduction/root；可选 spliced |
+| potential | `RunCytoTRACE()` | `CytoTRACEPlot()` | gene coverage |
+| lineages | `RunSlingshot()` | returned trajectory | group/reduction/start/end |
+| probabilistic | `RunPalantir()` | `PalantirTrajectoryPlot()` | backend/start |
+| Monocle | `RunMonocle2/3()` | method-specific | compatible counts/root |
+| velocity | `RunSecActVelocity()` | `VelocityPlot()` | aligned spliced/unspliced |
+
+Audited version **没有** `RunVelocity()`。Ordering/arrow field 不是 lineage proof。
+
+## 8 · Communication/regulation/metabolism
+
+| 任务 | Runner | Plotters | 资源/边界 |
+|---|---|---|---|
+| cell communication | `RunCellChat()` | `CCCNetworkPlot()` / `CCCHeatmap()` / `CCCStatPlot()` | species DB/group sizes；hypothesis |
+| spatial communication | `RunSpatialCellChat()` | `SpatialCellChatPlot()` | coordinates/technology |
+| regulons | `RunSCENIC()` | `SCENICPlot()` | motif DB/genome/backend |
+| SCENIC+ | `RunSCENICPlus()` | stored result/SCOP display | multiome/resources |
+| metabolism | `RunMetabolism()` | `MetabolismPlot()` | pathway DB/version/coverage |
+
+结果常存 assay、metadata 或 `srt@tools`；查看 returned object/help，并在适用时给 plotter 传同一个 `tool_name`。
+
+## 9 · Malignancy/phenotype
+
+| 任务 | Runner | Plotter | 合同 |
+|---|---|---|---|
+| expression CNV | `RunCNV()` | `CNVPlot()` | genome/method/normal reference/sample |
+| bulk phenotype cells | `RunScissor()` | `ScissorPlot()` | aligned bulk/features/phenotype/family |
+
+两者都不建立 clinical malignancy 或 causality，需要 orthogonal validation。
+
+## 10 · Spatial transcriptomics
+
+| 任务 | Runner | Plotter | 输入 |
+|---|---|---|---|
+| spot/domain | — | `SpatialSpotPlot()` | image/coordinates |
+| variable features | `RunSpatialVariableFeatures()` | `SpatialVariableFeaturePlot()` | assay/coords/method |
+| graph | `RunSpatialNetwork()` | `SpatialNetworkPlot()` | k/radius/graph name |
+| neighbourhood | `RunSpatialNeighborhood()` | `SpatialNeighborhoodPlot()` | groups/coords/tool name |
+| deconvolution | `RunRCTD()` | SCOP spatial display | compatible reference + `spacexr` |
+| multi-slice | `RunSpatialIntegration()` | `SpatialSpotPlot()` + diagnostics | sample/slice + backend |
+| communication | `RunSpatialCellChat()` | `SpatialCellChatPlot()` | group/species/technology/coords |
+
+Spot、domain、deconvolution 与 cell-resolved claims 不同，必须说明实际返回层级。
+
+## 11 · Plotter provenance pattern
+
+```r
+plot_record <- list(
+  plot_function = "scop::CellDimPlot",
+  dataset = "panc8_sub",
+  source_checkpoint = "artifacts/checkpoints/cross-source.rds",
+  arguments = list(
+    group.by = "dataset",
+    reduction = "HarmonyUMAP2D",
+    show_stat = FALSE
+  ),
+  allowed_claim = "technical-source mixing diagnostic"
+)
+```
+
+Graphics device 可以保存/组合 SCOP 返回图，但不能用 unrelated manual ggplot 替换 analysis layer 后仍写 SCOP caption。
+
+::: {.checkpoint}
+**Reference 检查点**
+
+运行新函数前验证 exported status、`args()`/help、prerequisites/backends、result storage、正确 SCOP plotter 与 interpretation boundary。
+:::
+
+::: {.exercise}
+## 练习
+
+选择一个 biological question，填写 runner、plotter、input checkpoint、assay/layer、group/sample fields、backend/reference、output location/table、validation、failure status，以及不能证明的一句话。
+:::
+
+完整逐函数 arguments 请看 [upstream SCOP reference](https://mengxu98.github.io/scop/reference/)。本站补充 workflow、evidence 和 claim context。
+
+::: {.boundary}
+Function availability 只证明 API 存在，不证明适用。只有 input、design、backend、validation、claim contract 全部通过，函数才应进入分析。
+:::

@@ -1,50 +1,159 @@
 ---
 title: "从这里开始"
-description: "根据单样本、多样本、跨数据集、注释或空间转录组任务选择正确的 SCOP Learn 路线。"
+description: "根据 raw files、单样本、生物学多样本、跨数据来源、注释、高级分析与空间转录组选择 SCOP Learn 路线。"
 ---
 
-这套教程按真实项目中的决策顺序组织，而不是把 314 个函数按字母排列。
+课程按真实项目的决策顺序组织，不是字母顺序函数表。你可以先完整复现 bundled cases，再用自己的数据替换 teaching object，同时保留相同 input、checkpoint 和 claim contract。
 
-## 按你拿到的数据选择入口
+::: {.learning-objectives}
+## 学习目标
 
-| 你拿到的内容 | 先看 | 再做 |
-|---|---|---|
-| `filtered_feature_bc_matrix.h5` | [不同格式读取](input-formats.qmd#x-h5) | [单样本流程](single-cell-case.qmd) |
-| `matrix.mtx(.gz)` + `features.tsv(.gz)` + `barcodes.tsv(.gz)` | [10x 三件套](input-formats.qmd#x-三件套目录) | [单样本流程](single-cell-case.qmd) |
-| Seurat `.rds` | [RDS 审计](input-formats.qmd#rds) | 根据元数据进入相应流程 |
-| `.h5ad` / `.loom` | [格式转换](input-formats.qmd#h5ad-与-loom) | 先确认转换没有丢失信息 |
-| 多个生物学样本 | [多样本设计](multi-sample.qmd#生物学多样本) | 注释、pseudobulk、高级分析 |
-| 多个公开数据集/平台 | [跨来源整合](multi-sample.qmd#跨数据来源整合) | 同时验证来源混合和生物学保留 |
-| Visium / 空间 Seurat 对象 | [空间转录组](spatial-case.qmd) | spot 质控 → 空间特征 → 邻域 → 可选去卷积 |
+完成本页后，你应能：
 
-## 固定的构建顺序
-
-::: {.workflow-map}
-**运行时预检 → 按样本审计与质控 → `db_scDblFinder()` → `JoinLayers()` → 多分辨率聚类 / `ClusterTreePlot()` → 在确有整合需要时使用 `SCTransform()` + `Harmony_integrate()` → `RunDimsEstimate()` → 证据化注释 → 围绕问题选择下游分析 → 报告与检查点**
+1. 根据文件与 study design 选择正确章节；
+2. 区分单样本、多 biological samples 与多 technical sources；
+3. 遵循固定 SCOP construction order，但不滥用 integration；
+4. 识别 plotting function 不能代替的人工 checkpoints；
+5. 在 advanced analysis 前定义完整 evidence bundle。
 :::
 
-这是一条默认构建合同，不是要求所有对象都做 Harmony。单个质量良好的样本通常不需要批次整合；疾病比较必须先有生物学样本设计，不能先看 UMAP 再补研究问题。
+## 1 · 选择入口
 
-## 最低元数据合同
+| 收到的内容 | 第一个问题 | 从哪里开始 | 下一步 |
+|---|---|---|---|
+| `filtered_feature_bc_matrix.h5` | 只有 RNA 还是 multi-modality？ | [H5 输入](input-formats.qmd#10x-h5) | [单样本](single-cell-case.qmd) 或 multiome |
+| 10x 三件套 | 三个文件是否来自同一 library？ | [三件套](input-formats.qmd#10x-three-file-directory) | [单样本](single-cell-case.qmd) |
+| `.rds` | counts、sample identity、history 是否完整？ | [RDS](input-formats.qmd#rds) | 审计后进入对应 workflow |
+| `.h5ad` / `.loom` | raw counts 在哪一层？会丢什么？ | [转换](input-formats.qmd#h5ad-and-loom) | conversion validation 后 QC |
+| 一个 biological sample | 目标是否为 construction/descriptive biology？ | [单样本](single-cell-case.qmd) | [注释](annotation.qmd)、descriptive advanced |
+| 多个 biological samples | 独立单位与 condition design 是什么？ | [多样本](multi-sample.qmd#biological-multi-sample-design) | [注释](annotation.qmd)、[高级](advanced.qmd) |
+| 多个 public datasets/technologies | source variation 是否 unwanted？有 shared populations 吗？ | [cross-source](multi-sample.qmd#cross-source-integration) | 验证 mixing + biology preservation |
+| Visium/spatial object | coordinate/image/sample fields 是否有效？ | [空间](spatial-case.qmd) | spot QC → features → graph → deconvolution decision |
+| 只有论文计划 | 哪些 figures/claims 可识别？ | [论文框架](paper-framework.qmd) | 锁定 design 后返回 inputs |
 
-在分析前明确并永久保留这些字段：
+## 2 · 固定 construction contract
+
+::: {.workflow-map}
+**Runtime preflight → per-sample import/audit/QC → `db_scDblFinder()` → `JoinLayers()` → multi-resolution clustering / `ClusterTreePlot()` → 仅在有依据时 `SCTransform()` + `Harmony_integrate()` → `RunDimsEstimate()` → annotation evidence → question-specific advanced analysis → result tables、figures、checkpoints 与 claim boundaries**
+:::
+
+顺序的含义：
+
+1. **先 audit。** 函数不能修复错位 metadata 或缺失 counts。
+2. **先按 library 评估 doublets。** Doublet rate/composition 是 library-specific。
+3. **有计划地 join layers。** Seurat v5 split layers 在统一 layer 前保留 source structure。
+4. **检查 cluster stability。** Resolution 是 model choice，不是美化 UMAP 的 slider。
+5. **只有合理 technical variable 才 integration。** 一个干净样本不需要 Harmony。
+6. **用证据选 dimensions。** 不按 UMAP 外观选择 PCs。
+7. **先注释再做 cell-type inference。** 保留 uncertain/mixed labels。
+8. **统计匹配 biological replication。** 多样本 condition DEG 优先 pseudobulk。
+
+## 3 · Runtime preflight
+
+Published evidence 使用 R 4.5.1、SCOP 0.8.9、Seurat 5.5.0、seed `20260807`。
+
+```r
+library(scop)
+library(Seurat)
+
+required_exports <- c(
+  "db_scDblFinder", "FeatureStatPlot", "ClusterTreePlot",
+  "Harmony_integrate", "RunDimsEstimate", "CellDimPlot",
+  "GroupHeatmap", "VolcanoPlot", "SpatialSpotPlot"
+)
+missing_exports <- setdiff(required_exports, getNamespaceExports("scop"))
+stopifnot(length(missing_exports) == 0)
+
+list(
+  R = R.version.string,
+  scop = as.character(packageVersion("scop")),
+  Seurat = as.character(packageVersion("Seurat")),
+  exports = length(getNamespaceExports("scop"))
+)
+```
+
+Optional modules 还需 R/Python packages、database、model file 或 genome resource。缺失时应记录 `not executed`，不能制造结果。
+
+## 4 · 最低 object/study contract
 
 ```r
 required <- c("sample_id", "condition", "patient_id", "batch")
-stopifnot(all(required %in% colnames(srt[[]])))
+missing <- setdiff(required, colnames(srt[[]]))
+stopifnot(length(missing) == 0)
 
-table(srt$sample_id, srt$condition)
-table(srt$sample_id, srt$batch)
+design <- unique(srt[[]][required])
+stopifnot(!anyDuplicated(design$sample_id))
+table(design$condition)
+table(design$condition, design$batch)
 ```
 
-`dataset`/`technology` 表示技术来源，`sample_id` 表示独立实验单位，二者不能互换。
+不要填假 placeholder 只为了让代码通过。未知 `patient_id/condition` 应保留 `NA` 并限制 claim。`dataset/technology` 描述 source，不能改名后变成 patient。
 
-## 进入高级分析前的三个检查点
+::: {.input-contract}
+**进入 workflow 前记录**
 
-1. **对象检查点：** counts、features、barcodes、assays、layers、元数据和样本身份完整。
-2. **生物学检查点：** marker 与预期细胞群一致，整合没有抹掉研究变量。
-3. **推断检查点：** 统计模型的独立单位与研究设计一致。多样本研究以 pseudobulk 为主要差异表达路径；细胞层面检验只作为探索/marker 分析。
+- source file/checksum 与 reader；
+- species、genome build、feature ID、assay/layer map；
+- sample sheet 与 independent unit；
+- 预期 cell/spot count 与 modality；
+- biological question 与 primary contrast；
+- technical variables 与可能 confounding；
+- allowed conclusion 与 stopping rule。
+:::
 
-## 本站证据的运行时
+## 5 · 三条不能混淆的路径
 
-当前结果使用 **R 4.5.1、SCOP 0.8.9、Seurat 5.5.0**，固定随机种子 `20260807`。比较精确数值前请先看[复现记录](reproducibility.qmd)。
+### 单样本
+
+可做 QC、clustering、annotation、marker programme 和 hypothesis-generating analysis；没有独立 biological samples 就不能估计 population-level condition effect。
+
+### 多 biological samples
+
+逐 sample QC，保留 patient/condition，判断 integration 必要性，并使用 sample-level inference。配对或 repeated samples 必须进入 model。
+
+### 多 technical/public sources
+
+当 shared populations 存在时用 integration 减少 unwanted source effect，并评估 source mixing + biology preservation。Source label 不自动成为 inferential replicate。
+
+## 6 · 授权下一阶段的 checkpoints
+
+| Checkpoint | 必须证据 | 授权 |
+|---|---|---|
+| import | dimensions、sparse counts、IDs、layers、metadata join、checksum | QC |
+| QC | before/after SCOP plots、thresholds、retained cells/sample、doublet/contamination | construction |
+| construction | dimensions、cluster tree、dimension estimate、UMAP、hash | annotation |
+| integration | pre/post source 与 biology diagnostics | integrated representation |
+| annotation | marker matrix、automated candidates、uncertainty、consensus | cell-type analysis |
+| inference | sample design、aggregation、model、contrast、full table | design 内的 statistical claim |
+| spatial | image/coordinate audit、spot QC、graph/features、mixture boundary | spot-level conclusion |
+
+Checkpoint 失败时应 stop 或走 alternative route，不能因为下一函数还能运行就继续。
+
+## 7 · 每个详细 lesson 的结构
+
+每页都有 learning outcomes、input contract、exact code/parameters、实际结果（若已执行）、SCOP-native figure provenance、checkpoint/output bundle、failure table、practice task 和 claim boundary。
+
+替换自己的数据时先只替换 dataset-specific values，不要同时改变 reader、QC、integration、reference 与 statistical design；分阶段更容易审计。
+
+## 8 · 推荐学习顺序
+
+- **快速复现：**`Dataset atlas → single sample → multi-sample → annotation → spatial → reproducibility`
+- **新多样本研究：**`Concepts → input formats → multi-sample → single-sample QC → annotation → advanced → paper framework`
+- **有 scRNA reference 的 spatial study：**`Concepts → inputs → reference annotation → spatial → communication boundary → paper framework`
+- **Reviewer/auditor：**`Reproducibility → manifest → paper framework → troubleshooting → relevant figures`
+
+::: {.checkpoint}
+**起始检查点**
+
+继续前，你应已选择路线、命名 independent unit、识别 counts layer、说明 integration 是 required 还是 merely possible，并写出一个当前 design 不能支持的结论。
+:::
+
+::: {.exercise}
+## 练习
+
+填写一句：“我收到 ___；reader 是 ___；independent unit 是 ___；technical variable 是 ___；从 ___ 开始；除非 ___，否则不越过 checkpoint ___。”
+:::
+
+::: {.boundary}
+Construction map 是默认顺序，不是运行所有方法的指令。最简单的有效 workflow 更好：干净单样本可能不需要 integration，而 disease paper 在需要漂亮 UMAP 前先需要 design 与 biological replication。
+:::

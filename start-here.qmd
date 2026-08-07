@@ -1,50 +1,183 @@
 ---
 title: "Start here"
-description: "Choose the correct SCOP Learn path for one sample, many samples, cross-dataset integration, annotation, or spatial transcriptomics."
+description: "A detailed route through SCOP Learn for raw files, one sample, biological multi-sample studies, cross-dataset integration, annotation, advanced analysis, and spatial transcriptomics."
 ---
 
-This course is organised around decisions you must make in a real project, not around an alphabetical function list.
+This course follows the decisions of a real project rather than an alphabetical function list. You can reproduce the bundled cases first, then replace the teaching object with your data while keeping the same input, checkpoint, and claim contracts.
 
-## Choose your entry point
+::: {.learning-objectives}
+## Learning outcomes
 
-| What you received | Begin with | Continue to |
-|---|---|---|
-| `filtered_feature_bc_matrix.h5` | [Input formats](input-formats.qmd#10x-h5) | [Single sample](single-cell-case.qmd) |
-| `matrix.mtx(.gz)` + `features.tsv(.gz)` + `barcodes.tsv(.gz)` | [Input formats](input-formats.qmd#10x-three-file-directory) | [Single sample](single-cell-case.qmd) |
-| `.rds` Seurat object | [Input formats](input-formats.qmd#rds) | Audit metadata, then the relevant workflow |
-| `.h5ad` / `.loom` | [Input formats](input-formats.qmd#h5ad-and-loom) | Verify conversion loss before analysis |
-| Several biological samples | [Multi-sample](multi-sample.qmd#biological-multi-sample-design) | [Annotation](annotation.qmd), [advanced](advanced.qmd) |
-| Several public datasets or technologies | [Multi-sample](multi-sample.qmd#cross-source-integration) | Validate mixing *and* biology preservation |
-| Visium / spatial Seurat object | [Spatial](spatial-case.qmd) | Spot QC → spatial features → neighbourhoods → optional deconvolution |
+After this orientation you will be able to:
 
-## The construction contract
-
-::: {.workflow-map}
-**Runtime preflight → per-sample audit/QC → `db_scDblFinder()` → `JoinLayers()` → multi-resolution clustering / `ClusterTreePlot()` → `SCTransform()` + `Harmony_integrate()` when integration is justified → `RunDimsEstimate()` → annotation evidence → question-specific downstream analysis → reports and checkpoints**
+1. choose the correct chapter from the files and study design you have;
+2. distinguish one sample, multiple biological samples, and multiple technical sources;
+3. follow the fixed SCOP construction order without integrating unnecessarily;
+4. recognize the human checkpoints that cannot be delegated to a plotting function;
+5. define a complete evidence bundle before starting advanced analysis.
 :::
 
-This is a default construction order, not a command to integrate everything. A single clean sample may not need Harmony. A disease comparison needs biological sample identity and a study design before it needs a UMAP.
+## 1 · Choose your entry point
 
-## Minimum object contract
+| What you received | First question | Begin with | Continue to |
+|---|---|---|---|
+| `filtered_feature_bc_matrix.h5` | does it contain RNA only or several modalities? | [input formats: H5](input-formats.qmd#10x-h5) | [single sample](single-cell-case.qmd) or multiome path |
+| 10x `matrix.mtx` + `features.tsv` + `barcodes.tsv` | are all three files from one library? | [input formats: three-file](input-formats.qmd#10x-three-file-directory) | [single sample](single-cell-case.qmd) |
+| `.rds` Seurat object | are counts, sample identity, and history intact? | [input formats: RDS](input-formats.qmd#rds) | audit, then the matching workflow |
+| `.h5ad` / `.loom` | which layer is raw counts and what may be lost? | [input formats: conversion](input-formats.qmd#h5ad-and-loom) | verify conversion before QC |
+| one biological sample | is the goal construction/descriptive biology? | [single sample](single-cell-case.qmd) | [annotation](annotation.qmd), descriptive advanced modules |
+| several biological samples | what is the independent unit and condition design? | [multi-sample](multi-sample.qmd#biological-multi-sample-design) | [annotation](annotation.qmd), [advanced](advanced.qmd) |
+| several public datasets/technologies | is source variation unwanted and are populations shared? | [cross-source integration](multi-sample.qmd#cross-source-integration) | validate mixing and biology preservation |
+| Visium / spatial object | which coordinate/image/sample fields are valid? | [spatial](spatial-case.qmd) | spot QC → features → graph → optional deconvolution |
+| a paper plan without data ready | which figures and claims are identifiable? | [paper framework](paper-framework.qmd) | lock design, then return to inputs |
 
-Before analysis, make these fields explicit and never silently reconstruct them later:
+## 2 · The fixed construction contract
+
+::: {.workflow-map}
+**Runtime preflight → per-sample import/audit/QC → `db_scDblFinder()` → `JoinLayers()` → multi-resolution clustering / `ClusterTreePlot()` → `SCTransform()` + `Harmony_integrate()` only when justified → `RunDimsEstimate()` → annotation evidence → question-specific advanced analysis → result tables, figures, checkpoints, and claim boundaries**
+:::
+
+The order matters:
+
+1. **Audit first.** A function cannot repair swapped metadata or missing counts.
+2. **Doublets before global merging decisions.** Doublet rate and composition are library-specific.
+3. **Join layers deliberately.** Seurat v5 split layers retain source structure until a unified layer is required.
+4. **Inspect cluster stability.** Resolution is a model choice, not a cosmetic slider.
+5. **Integrate only with a defensible technical variable.** One clean sample does not need Harmony.
+6. **Estimate dimensions from evidence.** Do not select PCs only from the appearance of UMAP.
+7. **Annotate before cell-type-specific inference.** Preserve uncertain and mixed labels.
+8. **Match downstream statistics to biological replication.** Pseudobulk is the primary condition-DEG path for replicated multi-sample studies.
+
+## 3 · Runtime preflight
+
+The published evidence was built with R 4.5.1, SCOP 0.8.9, Seurat 5.5.0, and seed `20260807`. Your first script should fail clearly if the required API is absent.
+
+```r
+library(scop)
+library(Seurat)
+
+required_exports <- c(
+  "db_scDblFinder", "FeatureStatPlot", "ClusterTreePlot",
+  "Harmony_integrate", "RunDimsEstimate", "CellDimPlot",
+  "GroupHeatmap", "VolcanoPlot", "SpatialSpotPlot"
+)
+
+missing_exports <- setdiff(required_exports, getNamespaceExports("scop"))
+stopifnot(length(missing_exports) == 0)
+
+list(
+  R = R.version.string,
+  scop = as.character(packageVersion("scop")),
+  Seurat = as.character(packageVersion("Seurat")),
+  exports = length(getNamespaceExports("scop"))
+)
+```
+
+Optional modules need additional packages, Python environments, databases, model files, or genome resources. Their absence should produce `not executed`, not a fabricated result.
+
+## 4 · Minimum object and study contract
+
+One sample can use `sample_id` even if it has a single value. A study-level condition comparison needs genuine biological replication.
 
 ```r
 required <- c("sample_id", "condition", "patient_id", "batch")
-stopifnot(all(required %in% colnames(srt[[]])))
+missing <- setdiff(required, colnames(srt[[]]))
+stopifnot(length(missing) == 0)
 
-table(srt$sample_id, srt$condition)
-table(srt$sample_id, srt$batch)
+design <- unique(srt[[]][required])
+stopifnot(!anyDuplicated(design$sample_id))
+table(design$condition)
+table(design$condition, design$batch)
 ```
 
-Use `dataset` or `technology` for a technical source; use `sample_id` for the independent experimental unit. They are not interchangeable.
+Do not copy placeholder values to make this code pass. If `patient_id` or `condition` is unknown, retain `NA` and restrict the claims. `dataset` and `technology` describe sources; they do not become patients by renaming the column.
 
-## Three checkpoints before advanced analysis
+::: {.input-contract}
+**Before entering a workflow, record**
 
-1. **Object checkpoint:** counts, features, barcodes, assays, layers, metadata, and sample identities are intact.
-2. **Biology checkpoint:** markers and expected cell populations are coherent; integration has not erased the variable of interest.
-3. **Inference checkpoint:** the independent unit matches the statistical model. For multi-sample studies, pseudobulk is the primary differential-expression path; per-cell testing is exploratory.
+- source file/checksum and reader;
+- species, genome build, feature-ID type, assay/layer map;
+- sample sheet and independent unit;
+- expected cell/spot count and modality;
+- target biological question and primary contrast;
+- technical variables and possible confounding;
+- allowed conclusion and stopping rule.
+:::
 
-## Runtime used for the published evidence
+## 5 · Three analysis paths that must not be confused
 
-The current evidence was produced with **R 4.5.1**, **SCOP 0.8.9**, and **Seurat 5.5.0**, using seed `20260807`. See the [reproducibility record](reproducibility.qmd) before comparing exact numbers.
+### One sample
+
+You can demonstrate QC, clustering, annotation, marker programmes, and hypothesis-generating advanced analyses. You cannot estimate a population-level condition effect without independent biological samples.
+
+### Multiple biological samples
+
+Do QC per sample, preserve patient/condition, decide whether integration is required, and use sample-level inference. Pairing or repeated samples should remain visible in the model.
+
+### Multiple technical/public sources
+
+Use integration to reduce unwanted source effects when shared populations exist. Evaluate source mixing and biology preservation. A source label is not automatically the inferential replicate.
+
+## 6 · Checkpoints that authorize the next stage
+
+| Checkpoint | Required evidence | What it authorizes |
+|---|---|---|
+| import | dimensions, sparse counts, IDs, assays/layers, metadata join, checksum | QC only |
+| QC | before/after SCOP plots, thresholds, retained cells by sample, doublet/contamination status | construction |
+| construction | dimensions, cluster tree, dimension estimate, UMAP, checkpoint hash | annotation |
+| integration | pre/post source and biology diagnostics | integrated representation use |
+| annotation | marker matrix, automated candidates, uncertainty, reviewed consensus table | cell-type-specific analysis |
+| inference | sample design, aggregation, model, contrast, full table | statistical claim within design |
+| spatial | image/coordinate audit, spot QC, graph/features, mixture boundary | spot-level spatial conclusion |
+
+If a checkpoint fails, the correct action is to stop or take an alternative route—not to continue because the next function runs.
+
+## 7 · How to use each detailed lesson
+
+Every workflow page follows the same pattern:
+
+1. learning outcomes;
+2. input contract;
+3. exact code and parameters;
+4. an executed result when available;
+5. SCOP-native figure provenance;
+6. a checkpoint and output bundle;
+7. failure/decision table;
+8. practice task;
+9. explicit claim boundary.
+
+When adapting a lesson, replace only the dataset-specific values first. Do not simultaneously change the reader, QC strategy, integration method, annotation reference, and statistical design; staged changes are easier to audit.
+
+## 8 · Suggested learning sequences
+
+### Fast reproduction of the published evidence
+
+`Dataset atlas → single sample → multi-sample → annotation → spatial → reproducibility`
+
+### New multi-sample single-cell study
+
+`Concepts → input formats → multi-sample → single-sample QC sections → annotation → advanced → paper framework`
+
+### New spatial study with a single-cell reference
+
+`Concepts → input formats → annotation of reference → spatial → advanced communication boundary → paper framework`
+
+### Reviewer/auditor path
+
+`Reproducibility → evidence manifest → paper framework → troubleshooting → relevant workflow figures`
+
+::: {.checkpoint}
+**Orientation checkpoint**
+
+Before continuing, you should have selected one route, named the independent unit, identified the counts layer, stated whether integration is required or merely possible, and written one conclusion that the current design cannot support.
+:::
+
+::: {.exercise}
+## Practice task
+
+Fill one row: “I received ___; the correct reader is ___; my independent unit is ___; the technical variable is ___; I will begin with ___; I will not proceed past checkpoint ___ unless ___.”
+:::
+
+::: {.boundary}
+The construction map is a default order, not an instruction to run every method. The simplest valid workflow is preferable: a clean one-sample teaching object may need no integration, while a disease paper needs design and biological replication before it needs an attractive UMAP.
+:::

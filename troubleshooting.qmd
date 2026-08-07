@@ -1,38 +1,286 @@
 ---
 title: "Troubleshooting decision guide"
-description: "Evidence-based fixes for SCOP input, layer, QC, integration, annotation, optional backend, and spatial-coordinate failures."
+description: "A staged diagnostic guide for SCOP input, layers, QC, doublets, integration, annotation, pseudobulk, optional backends, figures, manifests, and spatial coordinates."
 ---
 
-| Symptom | First evidence to inspect | Likely cause | Scoped response |
-|---|---|---|---|
-| `Read10X()` says barcodes missing | directory listing | missing `.gz`, wrong directory level, or renamed file | restore the standard three-file names and keep all three together |
-| H5 returns a list | `names(raw)` | multi-feature 10x file | select `raw[["Gene Expression"]]`; keep antibody/peak matrices separately |
-| duplicated features | `sum(duplicated(rownames(srt)))` | gene-symbol collisions | read with unique features or retain stable IDs; document mapping |
-| “layer is empty” | `Layers(srt[[assay]])` | counts-only object or wrong layer | join/select the intended layer; do not pretend normalised data exists |
-| QC removes most of one sample | per-sample distributions and retained counts | threshold mismatch or failed library | review the sample separately; do not hide it with global thresholds |
-| doublet call fails | counts integerness, cells per sample, package version | non-count input or backend mismatch | return to raw counts and run per sample; record the failure |
-| Harmony mixes cell types | pre/post marker and neighbour checks | overcorrection or confounded batch | reduce correction, change batch variable, or stop integration |
-| batches remain separated | source and biology plots | true biology, insufficient overlap, or undercorrection | do not force mixing; test shared populations and feature space |
-| label transfer is wrong | markers, prediction score, reference coverage | reference mismatch | use a better reference or retain `unknown`; do not relabel by confidence alone |
-| `RunLabelTransfer()` asks for ChromatinAssay | assay classes | SCOP path is for ATAC/multiome transfer | use Seurat anchors for generic RNA-to-RNA transfer |
-| CellTypist prepares Python repeatedly | SCOP environment log | environment/model bootstrap | let the managed environment finish; record model and versions |
-| `RunRCTD()` unavailable | `requireNamespace("spacexr")` | missing backend | install and validate `spacexr`, or declare deconvolution not executed |
-| spatial plot is mirrored or shifted | coordinate columns and image scale | mixed coordinate spaces | use one declared coordinate space across all spatial functions |
-| DEG has tiny P values but no replication | sample count and design matrix | cells treated as replicates | aggregate counts by biological sample and refit pseudobulk |
+Troubleshooting should preserve the first failing evidence. Record the exact call, complete error, input checkpoint, object audit, and session information before changing packages or rewriting the workflow. Fix the earliest broken contract; downstream symptoms often disappear.
 
-## Minimal diagnostic bundle
+::: {.learning-objectives}
+## Learning outcomes
+
+You will learn to:
+
+1. locate a failure at import, object, QC, construction, integration, annotation, inference, spatial, or publication stage;
+2. collect a minimal diagnostic bundle without exposing data unnecessarily;
+3. distinguish invalid input from a missing optional backend;
+4. avoid “fixes” that hide a failed sample, erase counts, or force a result;
+5. define the evidence required before declaring a problem resolved.
+:::
+
+## 1 · Start with the earliest failed gate
+
+| Stage | Gate that must pass | Do not proceed when |
+|---|---|---|
+| input | source checksum, dimensions, IDs, reader | wrong file, mixed three-file set, unknown matrix orientation |
+| object | counts layer, sparse matrix, metadata alignment | counts missing, cells duplicated, metadata rows misaligned |
+| QC | per-sample distributions and retention | one sample collapses or thresholds are unexplained |
+| construction | joined layers, dimensions, graphs, stable clusters | wrong reduction/graph or resolution chosen by appearance |
+| integration | source mixing and biology preservation | overcorrection, confounding, no shared populations |
+| annotation | marker/reference consensus and uncertainty | forced labels or reference mismatch |
+| inference | true biological replication and design | cells used as replicates or coefficient direction unclear |
+| spatial | coordinate/image/sample contract | mirrored/misaligned coordinates or mixed coordinate systems |
+| publication | manifest, hashes, SCOP plot provenance, rendered QA | stale figure, missing hash, non-SCOP analysis plot |
+
+## 2 · Minimal diagnostic bundle
+
+Run this on the object immediately before the failing call:
 
 ```r
-list(
-  dimensions = dim(srt),
-  assays = Assays(srt),
-  default_assay = DefaultAssay(srt),
-  layers = Layers(srt[[DefaultAssay(srt)]]),
-  reductions = Reductions(srt),
-  graphs = Graphs(srt),
-  metadata = colnames(srt[[]])
-)
+diagnose_srt <- function(srt) {
+  assay <- DefaultAssay(srt)
+  layers <- Layers(srt[[assay]])
+  counts <- if ("counts" %in% layers) {
+    LayerData(srt, assay = assay, layer = "counts")
+  } else {
+    NULL
+  }
+
+  list(
+    dimensions = dim(srt),
+    class = class(srt),
+    assays = Assays(srt),
+    default_assay = assay,
+    layers = layers,
+    sparse_counts = if (is.null(counts)) NA else inherits(counts, "sparseMatrix"),
+    cell_names_unique = !anyDuplicated(colnames(srt)),
+    feature_names_unique = !anyDuplicated(rownames(srt)),
+    metadata_rows_match = identical(rownames(srt[[]]), colnames(srt)),
+    metadata = colnames(srt[[]]),
+    reductions = Reductions(srt),
+    graphs = Graphs(srt),
+    images = Images(srt),
+    commands = names(srt@commands),
+    tools = names(srt@tools)
+  )
+}
+
+diagnose_srt(srt)
 sessionInfo()
 ```
 
-Save the exact error, the preceding call, and this bundle. A screenshot of a UMAP alone is not enough to diagnose an object.
+Also save:
+
+```r
+writeLines(conditionMessage(error_object), "artifacts/last-error.txt")
+saveRDS(srt, "artifacts/failing-input.rds")
+```
+
+Only do this when the object contains no prohibited or identifying data, or store it in an approved protected location. A screenshot of a UMAP is not a diagnostic bundle.
+
+## 3 · Input failures
+
+| Symptom | First evidence | Likely cause | Scoped response | Resolution proof |
+|---|---|---|---|---|
+| `Read10X()` says barcode/feature file missing | exact directory listing | wrong level, renamed/uncompressed file | restore standard trio or point to correct directory | reader returns expected dimensions |
+| feature count differs from matrix rows | headers and matrix dimensions | files mixed across samples/runs | reacquire one consistent trio | all three dimensions agree |
+| H5 returns a list | `names(raw)` | multi-feature file | select Gene Expression and retain other modalities | each modality has audited assay |
+| H5 checksum differs | SHA-256 | partial/wrong/updated file | stop and identify source | expected checksum matches |
+| text matrix is huge in memory | object class and file size | dense import/conversion | return to H5/Matrix Market/sparse format | counts inherits `sparseMatrix` |
+| negative/noninteger “counts” | value summary/provenance | normalized/log/scale matrix | reacquire raw counts or restrict methods | layer contract documented |
+| duplicated features | source IDs and symbols | symbol collisions | retain stable IDs or explicit mapping | unique rows plus mapping table |
+| metadata becomes `NA` | barcode join comparison | suffix/prefix mismatch | normalize join keys and require one-to-one match | no unexpected missing fields |
+
+Never fix mismatched dimensions by truncating a matrix or recycling metadata.
+
+## 4 · Seurat assay and layer failures
+
+### “Layer is empty” or “counts not found”
+
+```r
+Assays(srt)
+DefaultAssay(srt)
+Layers(srt[[DefaultAssay(srt)]])
+```
+
+If merged source-specific layers exist, join deliberately:
+
+```r
+srt <- JoinLayers(srt)
+stopifnot("counts" %in% Layers(srt[[DefaultAssay(srt)]]))
+```
+
+If counts never existed, joining cannot create them. Do not copy normalized `data` into a `counts` layer.
+
+### Wrong default assay
+
+Marker code may accidentally use SCT/integrated/peaks values. Set it explicitly before each method and pass `assay`/`layer` where the function supports them.
+
+```r
+DefaultAssay(srt) <- "RNA"
+stopifnot("counts" %in% Layers(srt[["RNA"]]))
+```
+
+### Dense coercion
+
+Search for `as.matrix()` around full matrices. It is acceptable only for a deliberately small teaching subset. Use sparse-aware aggregation and avoid printing the full object.
+
+## 5 · QC, doublet, and contamination failures
+
+| Symptom | Likely cause | Response |
+|---|---|---|
+| QC removes most of one sample | failed library or global threshold mismatch | inspect that sample separately; record and justify retention/exclusion |
+| retained cell count differs after rerun | threshold/seed/package drift | compare cell-name sets and manifest/runtime |
+| mitochondrial percentage near zero everywhere | wrong species/gene-symbol regex | inspect feature identifiers and calculate with correct pattern |
+| doublet runner rejects input | normalized/noninteger input, too few cells, backend mismatch | return to raw counts, run per library, record version/error |
+| doublet rate is identical across all libraries | global rather than per-library call | rerun at library level with expected loading context |
+| decontamination erases known markers | overcorrection or wrong background | compare original/corrected assays and stop if biology is distorted |
+| QC plot labels do not match thresholds | stale plot or metadata | regenerate SCOP `FeatureStatPlot()` from the exact checkpoint |
+
+Resolution proof is a before/after SCOP plot, retained-cell table by sample, exclusion-reason table, and unchanged original-count checkpoint.
+
+## 6 · Dimension, clustering, and UMAP failures
+
+### `RunDimsEstimate()` cannot find a reduction
+
+```r
+Reductions(srt)
+Embeddings(srt, "pca")[1:3, 1:3]
+```
+
+Run the required linear reduction first and pass its exact name/case. Do not pass a UMAP where a linear reduction is expected.
+
+### `ClusterTreePlot()` is empty
+
+Check that several resolution columns share the same prefix:
+
+```r
+grep("_snn_res\\.", colnames(srt[[]]), value = TRUE)
+```
+
+Run `FindClusters()` over a resolution grid and supply the actual prefix. One resolution cannot produce a resolution tree.
+
+### UMAP changes substantially
+
+Compare input reduction, dimensions, seed, neighbours, package versions, and cell names. UMAP coordinates can vary while neighbourhood preservation remains adequate; use structural/numeric diagnostics, not pixel equality alone.
+
+## 7 · Integration failures
+
+| Symptom | Diagnostic | Interpretation | Response |
+|---|---|---|---|
+| cell types mix after Harmony | marker/label neighbourhood preservation falls | overcorrection | reduce correction/change batch variable or stop integration |
+| batches remain separate | shared-population/source plot | true biology, no overlap, undercorrection, or preprocessing mismatch | inspect shared types/features; do not force mixing |
+| condition effect disappears | condition was confounded with batch | non-identifiable or overcorrected | return to design; do not integrate away the target |
+| rare type exists in one source | cell counts and marker evidence | source-specific biology or artefact | analyze separately or report limited support |
+| integrated reduction exists but plot uses PCA | reduction names in plotting call | wrong downstream representation | pass the intended SCOP reduction explicitly |
+
+Compare pre/post source mixing, cell-type preservation, markers, sample composition, and cluster structure. A single visual UMAP is insufficient.
+
+## 8 · Annotation failures
+
+| Symptom | Cause | Response |
+|---|---|---|
+| all cells receive high-confidence labels | closed classifier vocabulary | inspect out-of-reference markers and retain unknowns |
+| T/NK or Mono/DC labels swap | shared programmes | require positive and contradictory programmes, not one gene |
+| reference transfer is excellent only within one dataset | leakage/shared preprocessing | validate on an independent reference/query and report internal test honestly |
+| `RunLabelTransfer()` asks for ChromatinAssay | multiome-specific path used for RNA query | use generic RNA anchors or correct assay path |
+| SingleR fails at load | package/reference unavailable | install/version deliberately or record `not executed` |
+| fine labels have very few cells | unsupported resolution | merge to a defensible broad class or retain uncertain |
+| label appears in one failed sample only | QC/batch artefact | inspect sample QC, markers, doublets, and reference coverage |
+
+Resolution proof is a completed consensus table, marker heatmap, confidence/uncertainty, and cross-sample label audit.
+
+## 9 · Pseudobulk and composition failures
+
+### Tiny P values without replication
+
+```r
+design <- unique(srt[[]][c("sample_id", "condition")])
+table(design$condition)
+```
+
+If one independent sample exists per group, stop inferential testing. Per-cell models cannot create replication.
+
+### Design matrix is not full rank
+
+```r
+X <- model.matrix(~ batch + condition, data = design)
+c(rank = qr(X)$rank, columns = ncol(X))
+```
+
+Rank deficiency usually indicates confounding or redundant covariates. Remove only scientifically redundant terms; do not drop batch solely to obtain a condition coefficient when condition and batch are inseparable.
+
+### Coefficient direction is wrong
+
+Inspect factor levels and design-column names before fitting. State the numerator/denominator in the output and plot axis. Validate a few known markers manually.
+
+### Pseudobulk sample has too few cells
+
+Report cells and counts per `sample × cell type`, define a prespecified minimum, and run sensitivity analysis. Do not silently drop failed pseudo-samples after seeing the result.
+
+## 10 · Optional backend failures
+
+SCOP advanced modules may require R packages, Python environments, models, motif rankings, pathway databases, genome files, or references.
+
+```r
+backend_status <- c(
+  SingleR = requireNamespace("SingleR", quietly = TRUE),
+  celldex = requireNamespace("celldex", quietly = TRUE),
+  spacexr = requireNamespace("spacexr", quietly = TRUE),
+  zellkonverter = requireNamespace("zellkonverter", quietly = TRUE),
+  loomR = requireNamespace("loomR", quietly = TRUE)
+)
+backend_status
+```
+
+Record:
+
+- runner and exact error;
+- missing package/resource/model;
+- attempted environment/version;
+- whether failure occurred before or after result creation;
+- status `not executed` or `failed`;
+- installation/validation needed to unblock.
+
+Do not create a placeholder plot from synthetic values to fill the tutorial.
+
+## 11 · Spatial failures
+
+| Symptom | First check | Response |
+|---|---|---|
+| plot is mirrored/shifted | image key, coordinate columns, coordinate ranges | choose one declared coordinate system and verify overlay landmarks |
+| graph connects across slices | sample/image field and graph construction | build per slice or block cross-slice edges |
+| Moran genes reflect depth | correlation with `nCount_Spatial` | inspect QC/depth and adjust interpretation/preprocessing |
+| neighbourhood tool result not found | `tool_name`, `names(srt@tools)` | store and plot under the same explicit tool name |
+| RCTD unavailable | `requireNamespace("spacexr")` | install/validate or record not executed |
+| deconvolution labels are implausible | reference mismatch or missing types | rebuild compatible reference and inspect markers |
+| one section is analysed as patient replication | `sample_id` table | restrict to descriptive spot-level conclusions |
+
+## 12 · Figure and publication failures
+
+### A figure is not SCOP-native
+
+Inspect `evidence/real-data/manifest.json`. `plot_function` must consist only of `scop::...` plotters. Regenerate the analysis plot through the relevant SCOP function; the graphics device may only save/compose returned plots.
+
+### Manifest hash mismatch
+
+The figure or component changed after the manifest was created. Rebuild evidence; do not manually edit a hash. Then inspect the changed image at source resolution.
+
+### Rendered page is broken
+
+Run `quarto render`, inspect the exact reported source line, then verify internal links, image paths, alt text, and paired Chinese route. Finally inspect desktop and mobile screenshots; source success does not guarantee readable legends or tables.
+
+::: {.checkpoint}
+**Resolution checkpoint**
+
+A problem is resolved only when the original minimal reproduction passes, object invariants remain true, expected numeric/biological evidence is restored, manifests/hashes validate, and the actual SCOP-generated output has been inspected. “The error disappeared” is not enough if the analysis silently changed.
+:::
+
+::: {.exercise}
+## Practice task
+
+Take one recent error and write: failing stage, exact call, checkpoint, diagnostic bundle, earliest violated contract, smallest repair, resolution proof, and claim impact. If your proposed fix changes the independent unit or drops a sample, escalate it as a scientific decision rather than a technical patch.
+:::
+
+::: {.boundary}
+Troubleshooting may restore an intended computation; it cannot rescue an unidentifiable study design, missing biological replication, an inappropriate reference, or absent ground truth.
+:::

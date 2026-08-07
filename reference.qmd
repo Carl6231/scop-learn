@@ -1,44 +1,220 @@
 ---
 title: "SCOP function gateway"
-description: "A task-oriented gateway to SCOP input, QC, integration, annotation, advanced, spatial, and visualisation functions."
+description: "A detailed task-oriented gateway to SCOP 0.8.9 runners, plotters, required inputs, output locations, tutorial chapters, and verification commands."
 ---
 
-This page routes tasks to the relevant SCOP functions and tutorial chapters. For exact arguments and current upstream documentation, use the [SCOP reference index](https://mengxu98.github.io/scop/reference/).
+This is a learning gateway, not a replacement for the upstream help pages. It maps a research task to a **runner**, a **SCOP-native plotter**, the object contract, and the detailed chapter. For every function, your installed package help is authoritative for exact arguments.
 
-| Task | Main functions | Tutorial |
-|---|---|---|
-| bundled data / conversion | `LoadScopDataset()`, `FetchH5()`, `h5ad_to_srt()`, `loom_to_srt()` | [inputs](input-formats.qmd) |
-| cell QC | `RunCellQC()`, `db_scDblFinder()`, `RunDecontX()`, `RunDoubletCalling()` | [single sample](single-cell-case.qmd) |
-| spot QC | `RunSpotQC()` | [spatial](spatial-case.qmd) |
-| integration | `Harmony_integrate()`, `CCA_integrate()`, `RPCA_integrate()`, `scVI_integrate()` | [multi-sample](multi-sample.qmd) |
-| dimension choice | `RunDimsEstimate()` | [single sample](single-cell-case.qmd) |
-| cluster stability | `ClusterTreePlot()` | [single sample](single-cell-case.qmd) |
-| markers / DEG | `FindMarkers()`, `FindAllMarkers()` | [single](single-cell-case.qmd), [advanced](advanced.qmd) |
-| annotation | `RunCellTypist()`, `RunSingleR()`, `RunLabelTransfer()` | [annotation](annotation.qmd) |
-| enrichment | `RunEnrichment()`, `RunGSEA()` | [advanced](advanced.qmd) |
-| proportions | `RunPropeller()`, `RunProportionTest()` | [advanced](advanced.qmd) |
-| trajectory | `RunPAGA()`, `RunCytoTRACE()` | [advanced](advanced.qmd) |
-| communication | `RunCellChat()`, `RunSpatialCellChat()` | [advanced](advanced.qmd) |
-| regulation / metabolism | `RunSCENIC()`, `RunMetabolism()` | [advanced](advanced.qmd) |
-| malignancy / phenotype | `RunCNV()`, `RunScissor()` | [advanced](advanced.qmd) |
-| spatial features / graph | `RunSpatialVariableFeatures()`, `RunSpatialNetwork()`, `RunSpatialNeighborhood()` | [spatial](spatial-case.qmd) |
-| deconvolution / integration | `RunRCTD()`, `RunSpatialIntegration()` | [spatial](spatial-case.qmd) |
+::: {.learning-objectives}
+## Learning outcomes
 
-## Select an integration method
+You will learn to:
 
-| Method | Prefer when | Important prerequisite |
-|---|---|---|
-| Harmony | shared cell states, efficient batch correction | meaningful batch field and preserved biology checks |
-| CCA | shared correlated structure across datasets | adequate common features and overlap |
-| RPCA | conservative anchor integration for larger related data | within-dataset PCA and shared populations |
-| scVI | nonlinear latent model and sufficient data | working Python backend and explicit version lock |
+1. find a SCOP function from the biological task rather than its name;
+2. pair computational runners with SCOP plotters;
+3. identify the assay, layer, metadata, reduction, backend, or reference required;
+4. verify exports and signatures locally before copying tutorial code;
+5. record a function call as reproducible evidence.
+:::
 
-## Verify an exported function locally
+## 1 · Runtime and local verification
+
+The published runtime contains **314 exports** in SCOP 0.8.9.
 
 ```r
-"Harmony_integrate" %in% getNamespaceExports("scop")
+library(scop)
+
+packageVersion("scop")
+exports <- sort(getNamespaceExports("scop"))
+length(exports)
+
+"Harmony_integrate" %in% exports
 args(scop::Harmony_integrate)
 help("Harmony_integrate", package = "scop")
 ```
 
-The published runtime contained 314 exports. If your installed version differs, treat the local help and version as authoritative and record the difference.
+For any copied call:
+
+```r
+verify_scop_function <- function(name) {
+  stopifnot(name %in% getNamespaceExports("scop"))
+  list(
+    package_version = as.character(packageVersion("scop")),
+    name = name,
+    signature = args(getExportedValue("scop", name))
+  )
+}
+
+verify_scop_function("RunDimsEstimate")
+```
+
+If your installed signature differs, adapt to local help and record the version difference. Do not invent a wrapper from a function name.
+
+::: {.input-contract}
+**Function-call contract**
+
+Record the input checkpoint, assay/layer, reduction/dimensions, grouping/sample fields, reference/database/model, backend, exact arguments, seed, returned object/result location, plotter, output table, and allowed claim.
+:::
+
+## 2 · Input, data access, and object conversion
+
+| Task | SCOP function | Required input | Output / next step | Detailed lesson |
+|---|---|---|---|---|
+| load named SCOP collection | `LoadScopDataset()` | dataset, collection, cache path | downloaded object/path; audit source and checksum | [inputs](input-formats.qmd) |
+| H5 matrix + metadata | `FetchH5()` | data file, metadata file, assay/layer mapping | Seurat object; prove metadata join | [inputs](input-formats.qmd) |
+| H5AD conversion | `h5ad_to_srt()` | H5AD plus `zellkonverter` path | Seurat object; validate `.X`/layers/obs/var | [inputs](input-formats.qmd#h5ad-and-loom) |
+| Loom conversion | `loom_to_srt()` | Loom plus `loomR`, selected layers | Seurat object; validate spliced/unspliced alignment | [inputs](input-formats.qmd#h5ad-and-loom) |
+
+Low-level 10x H5 and three-file input use Seurat readers first; this is intentional. Enter SCOP after the object contract passes.
+
+## 3 · Cell and spot quality control
+
+| Task | Runner | SCOP plotter | Essential contract | Lesson |
+|---|---|---|---|---|
+| cell QC metrics/filtering | `RunCellQC()` | `FeatureStatPlot()` | raw counts, species-aware metrics, per-sample review | [single sample](single-cell-case.qmd) |
+| doublet database/path | `db_scDblFinder()` | review metadata with SCOP plots | per-library raw counts | [single sample](single-cell-case.qmd) |
+| general doublet call | `RunDoubletCalling()` | SCOP QC/dimension plot as appropriate | declared method/rate and raw counts | [single sample](single-cell-case.qmd) |
+| contamination correction | `RunDecontX()` | before/after SCOP expression/QC plot | original counts preserved, background/group contract | [single sample](single-cell-case.qmd) |
+| spatial spot QC | `RunSpotQC()` | `FeatureStatPlot()` / spatial plot path | Spatial assay, coordinate/image audit | [spatial](spatial-case.qmd) |
+
+Typical signatures:
+
+```r
+args(scop::RunDoubletCalling)
+args(scop::RunDecontX)
+args(scop::RunSpotQC)
+```
+
+Successful return does not choose thresholds for you. Save before/after distributions and retained counts by sample.
+
+## 4 · Construction, integration, dimensions, and clustering
+
+| Task | Function | Minimum required fields | Validation |
+|---|---|---|---|
+| Harmony integration | `Harmony_integrate()` | technical `batch`, assay, normalization contract | pre/post mixing + biology preservation |
+| CCA integration | `CCA_integrate()` | shared features/populations | anchors and biological preservation |
+| RPCA integration | `RPCA_integrate()` | within-source PCA and related datasets | conservative source correction |
+| scVI integration | `scVI_integrate()` | counts, sample field, Python backend | environment/version plus latent diagnostics |
+| dimension selection | `RunDimsEstimate()` | valid linear/latent reduction | `DimsEstimatePlot()` and recorded selected dims |
+| cluster stability | `ClusterTreePlot()` | multiple resolution metadata columns | transitions across a declared resolution grid |
+| cell embedding | `CellDimPlot()` | named reduction, group fields | SCOP-native display with honest labels |
+
+The default course order is `db_scDblFinder()` → `JoinLayers()` → multi-resolution clusters/`ClusterTreePlot()` → SCT + integration when justified → `RunDimsEstimate()`.
+
+Integration method guide:
+
+| Method | Prefer when | Important prerequisite | Stop when |
+|---|---|---|---|
+| Harmony | shared cell states and explicit technical source | meaningful batch field | biology is erased or condition is confounded |
+| CCA | correlated shared structure across datasets | adequate common features | anchors connect unlike populations |
+| RPCA | larger related datasets, conservative anchors | within-dataset PCA | shared populations are inadequate |
+| scVI | nonlinear latent model and sufficient cells | validated Python environment/counts | backend/model instability or poor preservation |
+
+See [multi-sample](multi-sample.qmd) for executable Harmony arguments and metrics.
+
+## 5 · Markers and annotation
+
+| Task | Runner | Plotter/evidence | Required review | Lesson |
+|---|---|---|---|---|
+| cluster markers | `FindMarkers()`, `FindAllMarkers()` exported by SCOP | `GroupHeatmap()` and other SCOP expression plots | positive/negative programmes, detection, sample distribution | [annotation](annotation.qmd) |
+| CellTypist | `RunCellTypist()` | labels, confidence, SCOP marker/embedding plot | model vocabulary, tissue coverage, unknowns | [annotation](annotation.qmd) |
+| SingleR | `RunSingleR()` | prediction/pruning plus marker review | appropriate labelled reference and packages | [annotation](annotation.qmd) |
+| RNA/ATAC label transfer | `RunLabelTransfer()` | predicted labels/evaluation | assay class, reference reduction/labels, gene activity | [annotation](annotation.qmd) |
+
+Do not equate classifier confidence with truth. Preserve candidate label, score, final label, uncertainty, and review note as separate fields.
+
+## 6 · Differential expression, enrichment, and composition
+
+| Question | Runner | SCOP plotter | Statistical unit | Lesson |
+|---|---|---|---|---|
+| show a valid DEG table | external/SCOP result table | `VolcanoPlot()` | inherited from DEG model | [advanced](advanced.qmd) |
+| over-representation | `RunEnrichment()` | `EnrichmentPlot()` | inherited from input list/design | [advanced](advanced.qmd) |
+| ranked enrichment | `RunGSEA()` | `GSEAPlot()` | inherited from ranked statistic/design | [advanced](advanced.qmd) |
+| cell proportion change | `RunPropeller()` | result + `ProportionTestPlot()` path | biological sample | [advanced](advanced.qmd) |
+| general proportion test | `RunProportionTest()` | `ProportionTestPlot()` | biological sample when inferential | [advanced](advanced.qmd) |
+
+The plotter cannot repair pseudo-replication. For a condition contrast, construct a sample-level design before running DEG or composition tests.
+
+## 7 · Trajectory and dynamics
+
+| Purpose | Runner | Plotter | Key prerequisites |
+|---|---|---|---|
+| cluster connectivity/pseudotime | `RunPAGA()` | `PAGAPlot()` | group field, reduction, justified root; optional spliced/unspliced |
+| differentiation potential | `RunCytoTRACE()` | `CytoTRACEPlot()` | adequate expressed genes and compatible data |
+| lineages | `RunSlingshot()` | returned trajectory/SCOP-supported display | group field, reduction, start/end justification |
+| probabilistic trajectory | `RunPalantir()` | `PalantirTrajectoryPlot()` | backend and start cell/state |
+| Monocle trajectory | `RunMonocle2()`, `RunMonocle3()` | method-specific result/plot path | compatible counts/object and root |
+| velocity extension | `RunSecActVelocity()` | `VelocityPlot()` | aligned spliced/unspliced and backend |
+
+The audited version does **not** export `RunVelocity()`. An ordering or arrow field is not lineage proof; see [advanced analysis](advanced.qmd#trajectory-and-dynamics).
+
+## 8 · Communication, regulation, and metabolism
+
+| Task | Runner | SCOP plotters | Required resources/boundary |
+|---|---|---|---|
+| cell communication | `RunCellChat()` | `CCCNetworkPlot()`, `CCCHeatmap()`, `CCCStatPlot()` | species DB, group sizes; hypothesis only |
+| spatial communication | `RunSpatialCellChat()` | `SpatialCellChatPlot()` | coordinates/technology and spatial distance |
+| regulons | `RunSCENIC()` | `SCENICPlot()` | motif rankings/annotations, genome/species, backend |
+| SCENIC+ | `RunSCENICPlus()` | corresponding stored results/SCOP display | multiome and additional resources |
+| metabolism | `RunMetabolism()` | `MetabolismPlot()` | pathway DB/version, gene coverage, method |
+
+Runner outputs are typically stored in an assay, metadata, or `srt@tools` under a tool name. Inspect the returned object and the function help; pass the same `tool_name` to the plotter when applicable.
+
+## 9 · Malignancy and phenotype association
+
+| Task | Runner | Plotter | Non-negotiable contract |
+|---|---|---|---|
+| expression-derived CNV | `RunCNV()` | `CNVPlot()` | genome, method/backend, valid normal reference, sample field |
+| bulk-phenotype-linked cells | `RunScissor()` | `ScissorPlot()` | aligned bulk features/samples/phenotype and family |
+
+Neither runner establishes clinical malignancy or causality. Require orthogonal validation and preserve the full reference/phenotype design.
+
+## 10 · Spatial transcriptomics
+
+| Task | Runner | SCOP plotter | Essential input | Lesson |
+|---|---|---|---|---|
+| spot/domain display | — | `SpatialSpotPlot()` | image or declared coordinate columns | [spatial](spatial-case.qmd) |
+| spatial variable features | `RunSpatialVariableFeatures()` | `SpatialVariableFeaturePlot()` | normalized assay, coordinates, method | [spatial](spatial-case.qmd) |
+| spatial graph | `RunSpatialNetwork()` | `SpatialNetworkPlot()` | image/coordinates, k/radius, graph name | [spatial](spatial-case.qmd) |
+| neighbourhoods | `RunSpatialNeighborhood()` | `SpatialNeighborhoodPlot()` | group labels, same graph/coordinate system, tool name | [spatial](spatial-case.qmd) |
+| deconvolution | `RunRCTD()` | inspect stored proportions with SCOP spatial plots | compatible single-cell reference, `spacexr` | [spatial](spatial-case.qmd) |
+| multi-slice integration | `RunSpatialIntegration()` | `SpatialSpotPlot()` and preservation diagnostics | sample/slice field and method backend | [spatial](spatial-case.qmd) |
+| spatial communication | `RunSpatialCellChat()` | `SpatialCellChatPlot()` | group, species, technology, coordinates | [spatial](spatial-case.qmd) |
+
+Spot, domain, deconvolution, and cell-resolved claims are different. Always state which one the function returned.
+
+## 11 · Plotter provenance pattern
+
+```r
+plot_record <- list(
+  plot_function = "scop::CellDimPlot",
+  dataset = "panc8_sub",
+  source_checkpoint = "artifacts/checkpoints/cross-source.rds",
+  arguments = list(
+    group.by = "dataset",
+    reduction = "HarmonyUMAP2D",
+    show_stat = FALSE
+  ),
+  allowed_claim = "technical-source mixing diagnostic"
+)
+```
+
+The graphics device may save or compose the returned SCOP plot. It should not replace the analysis layer with an unrelated manual ggplot while retaining a SCOP caption.
+
+::: {.checkpoint}
+**Reference checkpoint**
+
+Before running a new function, verify that it is exported, inspect `args()` and help in the installed version, confirm prerequisites/backends, identify where results are stored, pair it with the correct SCOP plotter, and write the interpretation boundary.
+:::
+
+::: {.exercise}
+## Practice task
+
+Select one biological question and fill this record: runner, plotter, input checkpoint, assay/layer, grouping/sample fields, backend/reference, expected output location/table, one validation, one failure status, and one sentence the result cannot prove.
+:::
+
+For exhaustive per-function argument documentation, use the [upstream SCOP reference index](https://mengxu98.github.io/scop/reference/). This site adds the workflow, evidence, and claim context around those calls.
+
+::: {.boundary}
+Function availability proves API presence, not method suitability. A function belongs in an analysis only when its input, design, backend, validation, and claim contract all pass.
+:::

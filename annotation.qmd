@@ -1,49 +1,159 @@
 ---
-title: "Cell annotation: choices and evidence"
-description: "Manual markers, reference transfer, SCOP CellTypist, SingleR prerequisites, uncertainty, and validation on real PBMC multiome data."
+title: "Cell annotation: choices, evidence, and uncertainty"
+description: "A detailed annotation workflow using real PBMC multiome data, SCOP marker heatmaps, reference transfer, CellTypist, SingleR prerequisites, consensus review, and uncertainty."
 ---
 
-The executed case uses `pbmcmultiome_sub`: 500 real PBMCs with RNA and peak assays, balanced across six broad bundled classes.
+Annotation is not a single function call. It is an evidence synthesis in which marker programmes, negative evidence, reference coverage, model vocabulary, confidence, tissue context, and doublet status are reviewed together. The executed case uses `pbmcmultiome_sub`: **500 real PBMCs**, paired RNA and peaks assays, and six broad bundled classes.
 
-## A practical evidence ladder
+::: {.learning-objectives}
+## Learning outcomes
 
-1. **Cluster markers and canonical markers** establish a tissue-aware baseline.
-2. **Reference transfer** asks whether a labelled reference can explain the query.
-3. **A pretrained classifier** supplies an independent model vocabulary and confidence.
-4. **Consensus review** resolves conflicts, mixed identities, rare populations, and unknowns.
+You will learn to:
 
-## Manual marker evidence
+1. distinguish cluster annotation from per-cell prediction;
+2. build positive and contradictory marker panels;
+3. visualize marker evidence with SCOP `GroupHeatmap()`;
+4. run and evaluate RNA reference transfer;
+5. use `RunCellTypist()` while retaining its native vocabulary and confidence;
+6. understand when `RunSingleR()` and `RunLabelTransfer()` are appropriate;
+7. create an auditable consensus table with unresolved labels.
+:::
+
+## 1 · Audit the query and decide annotation resolution
+
+::: {.input-contract}
+**Input contract**
+
+- real `pbmcmultiome_sub` query;
+- 21,074 features × 500 cells;
+- assays `RNA` and `peaks` retained;
+- normalized RNA data for expression-based methods;
+- six bundled broad labels used only for method evaluation;
+- no claim that a fine external vocabulary maps one-to-one to the broad labels.
+:::
 
 ```r
-data(pbmcmultiome_sub, package = "scop")
-DefaultAssay(pbmcmultiome_sub) <- "RNA"
-srt <- NormalizeData(pbmcmultiome_sub)
+library(scop)
+library(Seurat)
 
-markers <- c(
-  "MS4A1", "CD79A",        # B
-  "CD3D", "IL7R", "CD8A",# T
-  "NKG7", "GNLY",         # NK
-  "LYZ", "S100A8", "FCGR3A", # monocytes
-  "FCER1A"                 # dendritic
+data(pbmcmultiome_sub, package = "scop")
+srt <- pbmcmultiome_sub
+DefaultAssay(srt) <- "RNA"
+
+list(
+  dimensions = dim(srt),
+  assays = Assays(srt),
+  layers = Layers(srt[["RNA"]]),
+  labels = table(srt$CellType)
 )
-DotPlot(srt, features = markers, group.by = "CellType")
+
+srt <- NormalizeData(srt, assay = "RNA", verbose = FALSE)
 ```
 
-![Marker dot plot on real paired RNA and ATAC PBMC cells.](assets/figures/real-data/annotation-marker-evidence.png){fig-alt="Dot plot shows canonical immune marker expression across B, CD4 T, CD8 T, dendritic, monocyte, and NK classes."}
+Choose the label resolution before inspecting classifier output. For 500 PBMCs, broad B, CD4 T, CD8 T, dendritic, monocyte, and NK classes are supportable. A very fine memory/exhaustion vocabulary may be underpowered or absent.
 
-Marker evidence is contextual. `NKG7` alone does not separate NK from cytotoxic T cells; `LYZ` alone does not resolve monocyte and dendritic states.
+## 2 · Build a positive and negative marker matrix
 
-## RNA-to-RNA reference transfer
+An annotation panel should contain programmes, not isolated genes:
 
-For generic RNA reference mapping, use Seurat anchors. The executed test stratified the real PBMC object into 302 reference cells and 198 held-out query cells:
+| Candidate | Positive evidence | Contradictory evidence to inspect |
+|---|---|---|
+| B cell | `MS4A1`, `CD79A`, CD74/HLA-II programme | strong `NKG7/GNLY` or myeloid programme |
+| CD4 T | `CD3D`, `IL7R`, T-cell programme | strong B or myeloid programme |
+| CD8 T | `CD3D`, `CD8A`, cytotoxic genes when activated | no T-cell programme; pure NK programme |
+| NK | `NKG7`, `GNLY`, cytotoxic programme | strong CD3/TCR programme |
+| monocyte | `LYZ`, `S100A8`, `FCGR3A` depending subtype | pure lymphoid programme |
+| dendritic | `FCER1A`, antigen-presentation programme | broad doublet-like lineage conflict |
 
 ```r
+marker_panel <- intersect(
+  c(
+    "MS4A1", "CD79A",
+    "CD3D", "IL7R", "CD8A",
+    "NKG7", "GNLY",
+    "LYZ", "S100A8", "FCGR3A",
+    "FCER1A"
+  ),
+  rownames(srt)
+)
+```
+
+Use SCOP to aggregate and z-score expression by the bundled class:
+
+```r
+marker_heatmap <- GroupHeatmap(
+  srt,
+  features = marker_panel,
+  group.by = "CellType",
+  assay = "RNA",
+  layer = "data",
+  exp_method = "zscore",
+  show_row_names = FALSE,
+  show_column_names = TRUE,
+  cluster_rows = FALSE,
+  cluster_columns = FALSE,
+  column_title = "Bundled CellType"
+)
+marker_heatmap$plot
+```
+
+![SCOP GroupHeatmap of marker evidence in real paired RNA and ATAC PBMC cells.](assets/figures/real-data/annotation-marker-evidence.png){fig-alt="SCOP grouped heatmap shows z-scored canonical B, T, NK, monocyte, and dendritic marker expression across six bundled PBMC classes."}
+
+::: {.scop-native}
+**SCOP-native figure provenance:** generated by `scop::GroupHeatmap()` from the normalized RNA assay of the real multiome object. The graphics device only saves the SCOP-returned plot.
+:::
+
+Read the heatmap as a set of programmes. `NKG7` alone cannot separate NK from cytotoxic T cells; `LYZ` alone cannot resolve monocytes from dendritic cells; `S100A8` may reflect inflammatory state rather than a complete identity.
+
+## 3 · Derive cluster markers before assigning names
+
+```r
+if (!"seurat_clusters" %in% colnames(srt[[]])) {
+  srt <- FindVariableFeatures(srt, nfeatures = 1500, verbose = FALSE)
+  srt <- ScaleData(srt, features = VariableFeatures(srt), verbose = FALSE)
+  srt <- RunPCA(srt, npcs = 20, verbose = FALSE)
+  srt <- FindNeighbors(srt, reduction = "pca", dims = 1:15, verbose = FALSE)
+  srt <- FindClusters(srt, resolution = 0.4, random.seed = 20260807, verbose = FALSE)
+  srt <- RunUMAP(srt, reduction = "pca", dims = 1:15,
+                 seed.use = 20260807, verbose = FALSE)
+}
+
+Idents(srt) <- "seurat_clusters"
+
+cluster_markers <- scop::FindAllMarkers(
+  srt,
+  assay = "RNA",
+  only.pos = TRUE,
+  min.pct = 0.2,
+  logfc.threshold = 0.25
+)
+```
+
+If no trustworthy cluster column exists, construct neighbours and clusters first. Keep a marker table per cluster with positive markers, absent expected markers, contradictory markers, detection percentages, and adjusted P values. Annotation based only on the top gene is not auditable.
+
+## 4 · Evaluate RNA-to-RNA reference transfer
+
+Generic RNA-to-RNA mapping uses Seurat anchors. The executed check stratified the real object into **302 reference cells** and **198 held-out query cells**.
+
+```r
+set.seed(20260807)
+
+reference_cells <- unlist(tapply(
+  colnames(srt),
+  srt$CellType,
+  function(x) sample(x, ceiling(length(x) * 0.6))
+))
+
+reference <- subset(srt, cells = reference_cells)
+query <- subset(srt, cells = setdiff(colnames(srt), reference_cells))
+
 anchors <- FindTransferAnchors(
   reference = reference,
   query = query,
   reference.reduction = "pca",
   dims = 1:15
 )
+
 pred <- TransferData(
   anchorset = anchors,
   refdata = reference$CellType,
@@ -52,11 +162,25 @@ pred <- TransferData(
 query <- AddMetaData(query, pred)
 ```
 
-Held-out accuracy against the bundled broad labels was **93.43%**, with mean maximum prediction score **0.9027**. This is a within-dataset method check and will overestimate performance on a truly independent cohort.
+Evaluation:
 
-`scop::RunLabelTransfer()` is aimed at a `ChromatinAssay`/multiome transfer path. Do not call it as though it were a generic RNA-to-RNA wrapper.
+```r
+mean(query$predicted.id == query$CellType)
+mean(query$prediction.score.max)
+table(truth = query$CellType, predicted = query$predicted.id)
+```
 
-## CellTypist through SCOP
+The held-out accuracy was **0.9343** and the mean maximum score was **0.9027**. This is a within-dataset check with shared preprocessing and vocabulary, so it probably overestimates performance on an independent cohort.
+
+Before external transfer, ask:
+
+- does the reference contain the query tissue, species, technology, and disease states?
+- are query populations absent from the reference?
+- do high scores correspond to coherent markers?
+- are rare labels supported by enough reference cells?
+- does the result remain stable across reasonable dimensions and reference subsets?
+
+## 5 · Run CellTypist through SCOP
 
 ```r
 srt <- RunCellTypist(
@@ -64,40 +188,148 @@ srt <- RunCellTypist(
   assay = "RNA",
   layer = "data",
   model = "Immune_All_Low.pkl",
-  majority_voting = FALSE
+  majority_voting = FALSE,
+  insert_labels = TRUE,
+  insert_conf = TRUE,
+  prefix = "celltypist_",
+  verbose = FALSE
 )
+
 table(srt$celltypist_predicted_labels)
 summary(srt$celltypist_conf_score)
 ```
 
-The real run matched 5,361 genes and produced 19 fine immune labels with median confidence **0.9977**. The fine model vocabulary is not one-to-one with the six broad bundled classes, so this site does not manufacture a forced accuracy score.
+The real run matched **5,361 genes**, returned **19 fine immune labels**, and had median confidence **0.9977**. The model vocabulary is finer than the six bundled classes. The tutorial therefore does not collapse fine labels into broad truth labels after seeing the answers merely to manufacture an accuracy number.
 
-## SingleR
+High confidence means the model strongly prefers one label in its own vocabulary; it does not prove that the vocabulary is appropriate for the tissue or that the cell is biologically pure.
+
+::: {.checkpoint}
+**Checkpoint 1 — raw annotation candidates**
+
+Save manual candidates, reference predictions and scores, CellTypist labels and confidence, original clusters, doublet flags, and the unchanged query object before consensus editing.
+:::
+
+## 6 · Use SingleR only with a suitable labelled reference
 
 ```r
-# requires SingleR plus a labelled Seurat reference
 srt <- RunSingleR(
   srt_query = srt,
   srt_ref = reference_object,
-  ref_group = "label.main"
+  query_group = "seurat_clusters",
+  ref_group = "label.main",
+  query_assay = "RNA",
+  ref_assay = "RNA",
+  fine.tune = TRUE,
+  prune = TRUE,
+  cores = 4
 )
 ```
 
-`SingleR` and `celldex` were absent from the audited runtime; no result is claimed here. Installing a package is not the same as selecting a biologically appropriate reference.
+`SingleR` and `celldex` were absent from the audited runtime, so no SingleR result is shown. A `celldex` reference should not be selected simply because it is convenient. Check tissue, species, label resolution, disease context, age, and coverage.
 
-## Resolve conflicts explicitly
+## 7 · Understand SCOP `RunLabelTransfer()` for multiome
 
-Keep columns such as:
+SCOP exports `RunLabelTransfer()` for Seurat/scOMM transfer paths, particularly when a `ChromatinAssay` query needs RNA-derived labels or gene activity:
 
 ```r
-srt$annotation_manual
-srt$annotation_transfer
-srt$annotation_celltypist
-srt$annotation_final
-srt$annotation_confidence
-srt$annotation_note
+atac_query <- RunLabelTransfer(
+  srt = atac_query,
+  reference = rna_reference,
+  assay = "peaks",
+  method = "Seurat",
+  reference_assay = "RNA",
+  reference_reduction = "pca",
+  reference_dims = 1:30,
+  reference_label = "cell_type",
+  add_gene_activity = TRUE,
+  evaluate = TRUE,
+  truth_col = "CellType",
+  seed = 20260807
+)
 ```
 
-Prefer `uncertain_T_NK`, `mixed`, or `unknown` over a false precise label. Validate final labels with markers, abundance, tissue context, cluster coherence, and doublet flags.
+Do not present this as a generic wrapper for every RNA-to-RNA mapping. For the executed RNA held-out test, standard Seurat anchors were the accurate path.
 
-A per-cluster consensus table should contain the cluster, positive markers, contradictory markers, reference prediction and score, CellTypist label and confidence, final label, uncertainty flag, and reviewer note. The published evidence records method-level outputs; a new study must fill this table with its own cluster evidence rather than copy the bundled truth labels.
+## 8 · Build a per-cluster consensus table
+
+The final decision should be a table, not an overwritten identity vector:
+
+| Column | Meaning |
+|---|---|
+| `cluster` | stable cluster identifier |
+| `n_cells` | size and rarity context |
+| `positive_markers` | coherent supporting programme |
+| `contradictory_markers` | evidence against the candidate |
+| `transfer_label` / `transfer_score` | reference result |
+| `celltypist_label` / `celltypist_confidence` | classifier result |
+| `doublet_fraction` | mixed-population warning |
+| `final_label` | reviewed label |
+| `uncertainty` | `high`, `medium`, `low` or explicit flag |
+| `review_note` | reason for the decision |
+
+```r
+consensus <- data.frame(
+  cluster = levels(Idents(srt)),
+  n_cells = as.integer(table(Idents(srt))),
+  positive_markers = NA_character_,
+  contradictory_markers = NA_character_,
+  transfer_label = NA_character_,
+  transfer_score = NA_real_,
+  celltypist_label = NA_character_,
+  celltypist_confidence = NA_real_,
+  doublet_fraction = NA_real_,
+  final_label = NA_character_,
+  uncertainty = "unresolved",
+  review_note = NA_character_
+)
+```
+
+Use labels such as `uncertain_T_NK`, `mixed_myeloid`, or `unknown` when evidence conflicts. Do not resolve every conflict by selecting the highest numerical score.
+
+## 9 · Validate final labels
+
+After applying reviewed labels, recheck:
+
+1. positive and contradictory marker programmes;
+2. cluster and UMAP coherence with `CellDimPlot()`;
+3. distribution across samples and batches;
+4. doublet/low-quality enrichment;
+5. reference confidence and out-of-reference populations;
+6. label stability under reasonable clustering or reference changes;
+7. whether fine labels have enough cells for downstream statistics.
+
+```r
+group_fields <- "annotation_final"
+if ("sample_id" %in% colnames(srt[[]])) {
+  group_fields <- c(group_fields, "sample_id")
+}
+
+CellDimPlot(
+  srt,
+  group.by = group_fields,
+  reduction = "umap",
+  show_stat = FALSE,
+  raster = FALSE
+)
+```
+
+## Failure modes
+
+| Symptom | Likely cause | Response |
+|---|---|---|
+| all cells receive confident labels | closed model vocabulary | inspect unknown/out-of-reference evidence, not only confidence |
+| T and NK labels swap | shared cytotoxic programme | require CD3/TCR plus NK evidence and review clusters |
+| rare class appears in one batch only | artefact or real batch-specific biology | check QC, markers, sample replication, and reference coverage |
+| marker and classifier disagree | state effects, doublet, or reference mismatch | preserve the conflict and investigate |
+| `RunLabelTransfer()` requests ChromatinAssay | wrong method for RNA query | use RNA anchors or the appropriate assay path |
+| SingleR label vocabulary is too broad | unsuitable reference | replace reference or retain a broader/unknown label |
+
+::: {.exercise}
+## Practice task
+
+Choose one PBMC class and define at least three positive markers, two contradictory programmes, one reference-transfer requirement, and one reason to retain `unknown`. Then write the completed consensus row you would require before approving that label.
+:::
+
+::: {.boundary}
+Automated annotation generates candidates. A final cell label requires marker coherence, appropriate reference coverage, tissue context, uncertainty, and review. The bundled `CellType` is used here for internal evaluation, not as proof of external generalization.
+:::

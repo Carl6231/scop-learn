@@ -31,17 +31,29 @@
   "figures": {
     "human_pancreas": {
       "path": "assets/figures/real-data/spatial-human-pancreas.png",
-      "sha256": "840348db84c940a4dac94af433ed078117a61b4e01833ed0e919a8aa9c63d0be"
+      "sha256": "69cfef6301441db1d0a9d96f889386328b3095a4f96f14fef6b62085af45b104",
+      "plot_function": "scop::SpatialSpotPlot + scop::SpatialVariableFeaturePlot"
+    },
+    "spatial_network": {
+      "path": "assets/figures/real-data/spatial-network.png",
+      "sha256": "ea527b700d9db129ad4f267f4466164bac0edd12f79d45350145f5e7ddd0ed40",
+      "plot_function": "scop::SpatialNetworkPlot"
+    },
+    "spatial_neighborhood": {
+      "path": "assets/figures/real-data/spatial-neighborhood.png",
+      "sha256": "6141cd40f60a19774f0e25c8f151f504f78a10a5830dbbe319a6e20cfc044fbc",
+      "plot_function": "scop::SpatialNeighborhoodPlot"
     },
     "mouse_brain": {
       "path": "assets/figures/real-data/spatial-mouse-brain-slices.png",
-      "sha256": "af15731bfdb487558cfa3fc75093ef58f5f9acda4fe59930c14654529671260b"
+      "sha256": "24bb2639cf67fb6aa9f44ae1471e9299af335164da6efc2a975cb658e3a8b3b1",
+      "plot_function": "scop::SpatialSpotPlot"
     }
   },
   "checkpoint": {
     "path": "artifacts/real-data/checkpoints/spatial-human-pancreas.rds",
-    "sha256": "e6740de84d215e4820759c65ce83c4506a03c7ad86232356b0ca1dd800a72312",
-    "bytes": 15906073
+    "sha256": "3bc05837a9d7b313a8e2829d8ec4630901f269629981c6703c954c400a6e94ed",
+    "bytes": 15906072
   },
   "deconvolution": {
     "executed": false,
