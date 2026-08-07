@@ -90,4 +90,4 @@ Do QC per sample before using a merged distribution; otherwise a low-quality sam
 
 ## Validation record
 
-The exact reader calls and round-trip assertions are in the [input evidence manifest](evidence/real-data/input-formats.json) and the complete [evidence builder](https://github.com/Carl6231/scop-learn/blob/main/scripts/build-real-evidence.R).
+The exact reader calls and round-trip assertions are in the [input evidence manifest](evidence/real-data/input-formats.json) and the complete [evidence builder](scripts/build-real-evidence.R).
