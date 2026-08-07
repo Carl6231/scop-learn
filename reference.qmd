@@ -1,21 +1,44 @@
 ---
-title: "Reference gateway"
+title: "SCOP function gateway"
+description: "A task-oriented gateway to SCOP input, QC, integration, annotation, advanced, spatial, and visualisation functions."
 ---
 
-## Keep one API authority
+This page routes tasks to the relevant SCOP functions and tutorial chapters. For exact arguments and current upstream documentation, use the [SCOP reference index](https://mengxu98.github.io/scop/reference/).
 
-The generated function reference is maintained upstream. Use it for exact arguments, defaults, return values, and package-level examples:
+| Task | Main functions | Tutorial |
+|---|---|---|
+| bundled data / conversion | `LoadScopDataset()`, `FetchH5()`, `h5ad_to_srt()`, `loom_to_srt()` | [inputs](input-formats.qmd) |
+| cell QC | `RunCellQC()`, `db_scDblFinder()`, `RunDecontX()`, `RunDoubletCalling()` | [single sample](single-cell-case.qmd) |
+| spot QC | `RunSpotQC()` | [spatial](spatial-case.qmd) |
+| integration | `Harmony_integrate()`, `CCA_integrate()`, `RPCA_integrate()`, `scVI_integrate()` | [multi-sample](multi-sample.qmd) |
+| dimension choice | `RunDimsEstimate()` | [single sample](single-cell-case.qmd) |
+| cluster stability | `ClusterTreePlot()` | [single sample](single-cell-case.qmd) |
+| markers / DEG | `FindMarkers()`, `FindAllMarkers()` | [single](single-cell-case.qmd), [advanced](advanced.qmd) |
+| annotation | `RunCellTypist()`, `RunSingleR()`, `RunLabelTransfer()` | [annotation](annotation.qmd) |
+| enrichment | `RunEnrichment()`, `RunGSEA()` | [advanced](advanced.qmd) |
+| proportions | `RunPropeller()`, `RunProportionTest()` | [advanced](advanced.qmd) |
+| trajectory | `RunPAGA()`, `RunCytoTRACE()` | [advanced](advanced.qmd) |
+| communication | `RunCellChat()`, `RunSpatialCellChat()` | [advanced](advanced.qmd) |
+| regulation / metabolism | `RunSCENIC()`, `RunMetabolism()` | [advanced](advanced.qmd) |
+| malignancy / phenotype | `RunCNV()`, `RunScissor()` | [advanced](advanced.qmd) |
+| spatial features / graph | `RunSpatialVariableFeatures()`, `RunSpatialNetwork()`, `RunSpatialNeighborhood()` | [spatial](spatial-case.qmd) |
+| deconvolution / integration | `RunRCTD()`, `RunSpatialIntegration()` | [spatial](spatial-case.qmd) |
 
-<https://mengxu98.github.io/scop/reference/>
+## Select an integration method
 
-The current upstream reference includes the `scop` function index, articles, and versioned package navigation. SCOP Learn adds a teaching layer around those functions; it does not copy or override generated API pages.
+| Method | Prefer when | Important prerequisite |
+|---|---|---|
+| Harmony | shared cell states, efficient batch correction | meaningful batch field and preserved biology checks |
+| CCA | shared correlated structure across datasets | adequate common features and overlap |
+| RPCA | conservative anchor integration for larger related data | within-dataset PCA and shared populations |
+| scVI | nonlinear latent model and sufficient data | working Python backend and explicit version lock |
 
-## Useful starting points
+## Verify an exported function locally
 
-- [RunStandardWorkflow](https://mengxu98.github.io/scop/reference/RunStandardWorkflow.html)
-- [RunCellQC](https://mengxu98.github.io/scop/reference/RunCellQC.html)
-- [RunDimsEstimate](https://mengxu98.github.io/scop/reference/RunDimsEstimate.html)
-- [RunSpatialNetwork](https://mengxu98.github.io/scop/reference/RunSpatialNetwork.html)
-- [RunSpatialVariableFeatures](https://mengxu98.github.io/scop/reference/RunSpatialVariableFeatures.html)
+```r
+"Harmony_integrate" %in% getNamespaceExports("scop")
+args(scop::Harmony_integrate)
+help("Harmony_integrate", package = "scop")
+```
 
-If a linked page changes or disappears, the site link check should fail and the lesson should be reviewed before release.
+The published runtime contained 314 exports. If your installed version differs, treat the local help and version as authoritative and record the difference.

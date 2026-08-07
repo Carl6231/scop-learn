@@ -1,71 +1,134 @@
 ---
-title: "Complete case: single-cell"
+title: "Real single-sample workflow"
+description: "A complete SCOP and Seurat workflow on the real pancreas_sub dataset: QC, doublets, layers, dimensions, cluster stability, UMAP, markers, and annotation checks."
 ---
 
-<span class="version-chip">Executed: SCOP 0.8.9 · R 4.5.1 · synthetic input</span>
+This chapter executes a full construction path on `scop::pancreas_sub`, a real mouse pancreatic endocrinogenesis subset with 15,998 features and 1,000 cells. The object also contains spliced and unspliced assays for later trajectory work.
 
-## Biological rationale
-
-We use a small synthetic count matrix with two declared biological states. The purpose is to demonstrate the workflow seams and the evidence record, not to mimic a patient cohort or establish a biological discovery.
-
-## Input contract
-
-- 120 genes × 80 cells.
-- One RNA assay and two declared groups.
-- Synthetic counts with state-associated marker signal.
-- No patient, clinical, or treatment interpretation.
-
-## Workflow
+## 1 · Load and audit
 
 ```r
-library(Seurat)
 library(scop)
+library(Seurat)
 
-srt <- CreateSeuratObject(counts, project = "scop-learn-single-cell")
-srt$group <- group
-srt <- RunCellQC(
+set.seed(20260807)
+data(pancreas_sub, package = "scop")
+srt <- pancreas_sub
+DefaultAssay(srt) <- "RNA"
+
+dim(srt)
+Assays(srt)
+table(srt$CellType)
+```
+
+## 2 · Measure QC and call doublets
+
+```r
+srt[["percent.mt"]] <- PercentageFeatureSet(srt, pattern = "^mt-")
+srt <- db_scDblFinder(
   srt,
-  qc_metrics = c("umi", "gene"),
-  UMI_threshold = 0,
-  gene_threshold = 0,
+  assay = "RNA",
+  db_rate = 0.01,
   verbose = FALSE
 )
+
+VlnPlot(srt, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"))
+table(srt$db.scDblFinder_class)
+```
+
+Observed medians were 2,441 detected genes, 6,190 UMIs, and 0.6943% mitochondrial reads. `db_scDblFinder()` called 21 doublets.
+
+![QC distributions before and after the recorded thresholds.](assets/figures/real-data/single-qc.png){fig-alt="Violin plots compare detected genes and mitochondrial percentage before and after QC in real mouse pancreas cells."}
+
+The chosen thresholds fit this dataset’s observed range:
+
+```r
+keep <- with(srt[[]],
+  db.scDblFinder_class == "singlet" &
+  nFeature_RNA >= 1000 & nFeature_RNA <= 5000 &
+  percent.mt < 5
+)
+srt <- subset(srt, cells = rownames(srt[[]])[keep])
+```
+
+This retained **979/1,000 cells (97.9%)**. The thresholds are recorded evidence, not universal defaults.
+
+The exclusion audit is explicit: 21 doublets; 0 cells below 1,000 or above 5,000 detected genes; 0 cells at or above 5% mitochondrial reads; 21 unique cells excluded. Reasons are reported separately because they can overlap in other datasets.
+
+### Doublets and ambient RNA are different problems
+
+`db_scDblFinder()` is the verified default here. `RunDoubletCalling()` can route other supported callers when their dependencies and assumptions fit; compare score/class columns and run per sample. Ambient contamination is not solved by removing doublets: inspect suspicious cross-lineage markers and use `RunDecontX()` only with raw counts, suitable batches/background, and before/after marker checks.
+
+## 3 · Join layers and construct the embedding
+
+```r
+srt <- JoinLayers(srt)
 srt <- NormalizeData(srt, verbose = FALSE)
-srt <- FindVariableFeatures(srt, nfeatures = 60, verbose = FALSE)
+srt <- FindVariableFeatures(srt, nfeatures = 2000, verbose = FALSE)
 srt <- ScaleData(srt, features = VariableFeatures(srt), verbose = FALSE)
-srt <- RunPCA(srt, features = VariableFeatures(srt), npcs = 12, verbose = FALSE)
-srt <- FindNeighbors(srt, dims = 1:8, verbose = FALSE)
-srt <- FindClusters(srt, resolution = 0.4, verbose = FALSE)
-srt <- RunUMAP(srt, dims = 1:8, verbose = FALSE)
-estimated_dims <- RunDimsEstimate(
+srt <- RunPCA(srt, features = VariableFeatures(srt), npcs = 30, verbose = FALSE)
+```
+
+## 4 · Test clustering resolution
+
+```r
+srt <- FindNeighbors(srt, dims = 1:20, verbose = FALSE)
+srt <- FindClusters(srt, resolution = c(0.2, 0.4, 0.8), verbose = FALSE)
+
+ClusterTreePlot(
   srt,
-  reduction = "pca",
-  reduction_method = "scree",
-  verbose = FALSE
+  cluster_cols = grep("RNA_snn_res", colnames(srt[[]]), value = TRUE),
+  title = "Resolution stability on real mouse pancreas"
 )
 ```
 
-The complete executed script is [available in the repository](https://github.com/Carl6231/scop-learn/blob/main/scripts/single-cell-case.R). The script writes an evidence record and the figure shown below.
+![Cluster tree across resolutions 0.2, 0.4, and 0.8.](assets/figures/real-data/single-cluster-tree.png){fig-alt="Cluster tree shows stable and splitting clusters across three resolutions in the real pancreas dataset."}
 
-![UMAP of the executed synthetic single-cell case, colored by declared state.](assets/figures/single-cell-overview.png){fig-alt="UMAP showing two declared synthetic states" fig-cap="The plot is a workflow checkpoint, not a biological discovery. The input and output identities are recorded in the evidence manifest."}
+Resolution 0.4 produced seven clusters and provides an interpretable middle point. A cluster tree does not choose resolution automatically; it shows where subdivisions appear.
 
-## Expected insights
+## 5 · Estimate usable dimensions and run UMAP
 
-- The object retains 80 cells and 120 genes after the deliberately permissive QC checkpoint.
-- The declared group signal remains visible in the low-dimensional view.
-- The SCOP dimension estimator returns a suggested range; it does not replace inspecting the scree behavior or choosing dimensions for the study.
-- The evidence manifest records the exact package and runtime identity used to create the plot.
+```r
+dims <- RunDimsEstimate(
+  srt,
+  reduction = "pca",
+  method = "ensemble",
+  min_dims = 5,
+  verbose = FALSE
+)
+srt <- RunUMAP(srt, dims = dims, seed.use = 20260807, verbose = FALSE)
+```
 
-## Interpretation boundary
+The executed ensemble estimate selected PCs **1–11**.
 
-The two colors are labels deliberately inserted into a synthetic matrix. They are not discovered cell types, treatment effects, or evidence about a patient population. The case demonstrates how to build and inspect a workflow, not how to make a claim from arbitrary clusters.
+![UMAP of real mouse pancreatic cells coloured by bundled CellType.](assets/figures/real-data/single-umap.png){fig-alt="UMAP shows ductal, endocrine, Ngn3-high endocrine progenitor, Ngn3-low endocrine progenitor, and pre-endocrine cells."}
 
-## Review checklist
+## 6 · Find markers and propose labels
 
-- Check the QC thresholds and retained-cell count.
-- Check which assay and features feed PCA.
-- Check the dimensions used for neighbors and UMAP.
-- Record whether cluster identities agree with declared or external evidence.
-- Preserve the evidence manifest before changing the workflow.
+```r
+Idents(srt) <- srt$RNA_snn_res.0.4
+markers <- FindAllMarkers(
+  srt, assay = "RNA", only.pos = TRUE,
+  min.pct = 0.2, logfc.threshold = 0.25
+)
 
-[Evidence manifest](evidence/single-cell-case.json) · [Reproducibility policy](reproducibility.qmd)
+top_by_cluster <- markers |>
+  dplyr::group_by(cluster) |>
+  dplyr::slice_min(p_val_adj, n = 10)
+```
+
+For an internal check only, mapping each cluster to its majority bundled `CellType` agrees for **83.25%** of retained cells. This is not independent validation: the known labels come from the same bundled object.
+
+## 7 · Save a restartable checkpoint
+
+```r
+saveRDS(srt, "checkpoints/03_clustered_pancreas.rds")
+write.csv(markers, "results/cluster_markers.csv", row.names = FALSE)
+writeLines(capture.output(sessionInfo()), "results/session-info.txt")
+```
+
+Next, use [cell annotation](annotation.qmd) to combine marker and reference evidence, or use the spliced/unspliced assays for a properly justified [trajectory analysis](advanced.qmd#trajectory-and-dynamics).
+
+::: {.result-note}
+**Result you can defend:** the real object passes a documented QC and doublet path, has stable structure across tested resolutions, and recovers the bundled developmental cell classes. **Result you cannot claim:** a new developmental discovery from this teaching subset.
+:::

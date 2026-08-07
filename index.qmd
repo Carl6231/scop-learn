@@ -1,76 +1,67 @@
 ---
-pagetitle: "SCOP Learn"
+pagetitle: "SCOP Learn — real-data single-cell and spatial workflows"
+description: "A bilingual, executable curriculum built from SCOP 0.8.9 bundled datasets and a public 10x H5 file."
 ---
 
 ::: {.hero-learn}
-<div class="eyebrow">SCOP Learn · source-grounded curriculum</div>
+<div class="eyebrow">REAL DATA · EXECUTABLE · CLAIM-BOUNDED</div>
 
-# From rationale to reproducible result.
+# From raw files to a paper-scale SCOP workflow
 
-SCOP Learn is a bilingual teaching site for the SCOP R package. Each lesson keeps the same rhythm: biological rationale, R code, expected insights, interpretation boundary, and provenance.
+Learn how to read common single-cell formats, audit and quality-control one or many samples, integrate sources, annotate cells, run advanced analyses, and analyse spatial transcriptomics. Every primary figure below was generated from a real dataset—not a synthetic illustration.
 
-<span class="version-chip">Validated locally with SCOP 0.8.9</span>
+[Start the curriculum](start-here.qmd){.btn .btn-primary} [中文教程](zh/index.qmd){.btn .btn-outline-light}
 :::
 
-::: {.grid .gap-4 .mb-5}
+<div class="proof-strip">
+<div class="proof-item"><strong>5</strong> bundled real datasets</div>
+<div class="proof-item"><strong>1,222</strong> cells read from public 10x H5</div>
+<div class="proof-item"><strong>8</strong> real-data figures inspected</div>
+<div class="proof-item"><strong>314</strong> SCOP 0.8.9 exports audited</div>
+</div>
+
+## The curriculum spine
+
+::: {.grid}
 ::: {.g-col-12 .g-col-md-4}
 ::: {.lesson-card}
-## Start with a map
+### 01 · Get data in
 
-[Follow the learning path](start-here.qmd) from data and object structure to a complete analysis.
+Choose the correct reader for H5, a three-file 10x directory, RDS, H5AD, or Loom. A public PBMC 1k H5 is round-tripped through three-file and RDS forms.
+
+[Input formats →](input-formats.qmd)
 :::
 :::
 ::: {.g-col-12 .g-col-md-4}
 ::: {.lesson-card}
-## Understand the pieces
+### 02 · Build trustworthy objects
 
-[Read the concepts](concepts.qmd) behind assays, layers, reductions, metadata, and evidence.
+Measure QC before thresholds, call doublets, join Seurat v5 layers, examine cluster stability, and select dimensions from evidence.
+
+[Single sample →](single-cell-case.qmd)
 :::
 :::
 ::: {.g-col-12 .g-col-md-4}
 ::: {.lesson-card}
-## Run two cases
+### 03 · Scale to studies
 
-[Single-cell](single-cell-case.qmd) and [spatial](spatial-case.qmd) cases are executed locally and published with provenance.
+Keep sample identity, integrate technical sources, validate biology preservation, annotate by evidence, and use pseudobulk for sample-level inference.
+
+[Multi-sample →](multi-sample.qmd)
 :::
 :::
 :::
 
-## How to use this site
+## What the executed evidence shows
 
-1. Read the biological question before copying code.
-2. Confirm that your input matches the lesson contract.
-3. Run the smallest checkpoint first.
-4. Compare your result with the expected insight, not with a decorative screenshot.
-5. Record the package, R, data, and environment identities.
+![Real cross-source pancreas cells before and after SCT plus Harmony integration.](assets/figures/real-data/cross-source-integration.png){fig-alt="Three UMAP panels show pancreatic cells before Harmony by source, after Harmony by source, and after Harmony by cell type."}
 
-::: {.grid .gap-4}
-::: {.g-col-12 .g-col-md-6}
-::: {.case-card}
-## Complete single-cell case
+On `panc8_sub`, the fraction of neighbours drawn from another technical source rose from **0.2169 to 0.6765**, while same-cell-type neighbourhood preservation rose from **0.9379 to 0.9616**. This supports the integration code path; it does not turn technical sources into biological replicates.
 
-A synthetic two-state count matrix is carried through QC, normalization, variable-feature selection, PCA, neighbors, clusters, UMAP, and dimension estimation.
+## Where this can take a paper
 
-[Open the case →](single-cell-case.qmd)
-:::
-:::
-::: {.g-col-12 .g-col-md-6}
-::: {.case-card}
-## Complete spatial case
-
-A synthetic spatial grid is carried through normalization, spatially variable feature scoring, and a KNN spatial network.
-
-[Open the case →](spatial-case.qmd)
-:::
-:::
-:::
+The [paper-scale framework](paper-framework.qmd) connects inputs, QC, integration, annotation, differential analysis, enrichment, composition, trajectory, communication, regulation, metabolism, malignancy, and spatial analysis to explicit research questions and claim boundaries. Heavy optional modules are never shown as “completed” unless their backend actually ran.
 
 ::: {.boundary}
-SCOP Learn teaches reproducible package use. It does not turn exploratory cell- or spot-level patterns into clinical, patient-level, or causal claims.
+**Evidence boundary.** This site proves executable workflows on the named datasets and runtime. It does not prove that a method is appropriate for every study, and it does not convert bundled example data into new biological discovery.
 :::
-
-## Keep the sources distinct
-
-- [SCOP API Reference](https://mengxu98.github.io/scop/reference/) — the upstream function-level reference.
-- [SCOP Studio](https://carl6231.github.io/scop-studio-site/) — the separate product and local workflow site.
-- [Reproducibility](reproducibility.qmd) — version, data, environment, and artifact records for this site.

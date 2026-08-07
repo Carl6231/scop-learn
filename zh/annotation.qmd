@@ -1,0 +1,103 @@
+---
+title: "细胞注释：有哪些选择，如何取证"
+description: "在真实 PBMC 多组学数据上演示人工 marker、参考标签转移、SCOP CellTypist、SingleR 前提、置信度和冲突处理。"
+---
+
+实际案例使用 `pbmcmultiome_sub`：500 个真实 PBMC，含 RNA 与 peaks 两个 assays，自带 6 个数量近似平衡的粗粒度类型。
+
+## 实用的证据阶梯
+
+1. **cluster marker + 经典 marker：** 建立符合组织背景的基线。
+2. **参考标签转移：** 检查已有参考是否能解释 query。
+3. **预训练分类器：** 提供另一套标签词汇和置信度。
+4. **一致性审查：** 处理冲突、混合身份、稀有群和 unknown。
+
+## 人工 marker 证据
+
+```r
+data(pbmcmultiome_sub, package = "scop")
+DefaultAssay(pbmcmultiome_sub) <- "RNA"
+srt <- NormalizeData(pbmcmultiome_sub)
+
+markers <- c(
+  "MS4A1", "CD79A",             # B
+  "CD3D", "IL7R", "CD8A",     # T
+  "NKG7", "GNLY",              # NK
+  "LYZ", "S100A8", "FCGR3A",  # monocyte
+  "FCER1A"                       # DC
+)
+DotPlot(srt, features = markers, group.by = "CellType")
+```
+
+![真实配对 RNA/ATAC PBMC 的 marker dot plot。](../assets/figures/real-data/annotation-marker-evidence.png){fig-alt="dot plot 展示 B、CD4 T、CD8 T、DC、Mono 与 NK 的经典免疫 marker 表达。"}
+
+单个 marker 往往不够：`NKG7` 不能独立区分 NK 和细胞毒性 T，`LYZ` 也不能独立分开 monocyte 与 DC。
+
+## RNA 到 RNA 的参考标签转移
+
+通用 RNA 参考映射使用 Seurat anchors。真实测试把 PBMC 分层拆成 302 个 reference 和 198 个 held-out query：
+
+```r
+anchors <- FindTransferAnchors(
+  reference = reference,
+  query = query,
+  reference.reduction = "pca",
+  dims = 1:15
+)
+pred <- TransferData(
+  anchorset = anchors,
+  refdata = reference$CellType,
+  dims = 1:15
+)
+query <- AddMetaData(query, pred)
+```
+
+对自带粗粒度标签的 held-out 准确率为 **93.43%**，最大预测分数均值为 **0.9027**。这是同数据集内部方法检查，对真正外部队列通常会高估表现。
+
+`scop::RunLabelTransfer()` 主要面向 `ChromatinAssay`/multiome 转移，不应被当作通用 RNA-to-RNA wrapper。
+
+## 通过 SCOP 使用 CellTypist
+
+```r
+srt <- RunCellTypist(
+  srt,
+  assay = "RNA",
+  layer = "data",
+  model = "Immune_All_Low.pkl",
+  majority_voting = FALSE
+)
+table(srt$celltypist_predicted_labels)
+summary(srt$celltypist_conf_score)
+```
+
+真实运行匹配了 5,361 个基因，产生 19 个细粒度免疫标签，置信度中位数 **0.9977**。模型的细粒度词汇与 6 个粗标签并非一一对应，因此本站不强行制造一个误导性的准确率。
+
+## SingleR
+
+```r
+# 需要 SingleR 和带标签、且生物学合适的 Seurat 参考
+srt <- RunSingleR(
+  srt_query = srt,
+  srt_ref = reference_object,
+  ref_group = "label.main"
+)
+```
+
+审计运行时未安装 `SingleR` 和 `celldex`，因此不宣称已有结果。安装成功也不等于参考选择正确。
+
+## 明确处理冲突和不确定性
+
+建议保留独立字段：
+
+```r
+srt$annotation_manual
+srt$annotation_transfer
+srt$annotation_celltypist
+srt$annotation_final
+srt$annotation_confidence
+srt$annotation_note
+```
+
+当证据冲突时保留 `uncertain_T_NK`、`mixed` 或 `unknown`，不要为了图例整齐而强制命名。最终标签要同时通过 marker、丰度、组织背景、cluster 一致性和双细胞标记的核对。
+
+逐 cluster 共识表至少应包含：cluster、正向 markers、矛盾 markers、reference prediction/score、CellTypist label/confidence、final label、uncertainty flag 和 reviewer note。本站证据记录了方法级输出；新研究必须用自己的 cluster 证据填表，不能复制自带 truth labels。

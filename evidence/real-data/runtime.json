@@ -1,0 +1,72 @@
+{
+  "generated_at": "2026-08-08 00:55:19 CST",
+  "seed": 20260807,
+  "R": "4.5.1",
+  "scop": "0.8.9",
+  "Seurat": "5.5.0",
+  "scop_exports": 314,
+  "datasets": [
+    {
+      "dataset": "pancreas_sub",
+      "features": 15998,
+      "observations": 1000,
+      "assays": "RNA;spliced;unspliced",
+      "modality": "scRNA-seq + spliced/unspliced",
+      "source": "Bastidas-Ponce 2019 / scVelo",
+      "tutorial_role": "single sample and trajectory",
+      "_row": "pancreas_sub"
+    },
+    {
+      "dataset": "panc8_sub",
+      "features": 12940,
+      "observations": 1600,
+      "assays": "RNA",
+      "modality": "scRNA-seq, eight sources",
+      "source": "SeuratData panc8",
+      "tutorial_role": "cross-source integration",
+      "_row": "panc8_sub"
+    },
+    {
+      "dataset": "pbmcmultiome_sub",
+      "features": 21074,
+      "observations": 500,
+      "assays": "RNA;peaks",
+      "modality": "paired RNA + ATAC",
+      "source": "SeuratData pbmcMultiome",
+      "tutorial_role": "annotation and multiome",
+      "_row": "pbmcmultiome_sub"
+    },
+    {
+      "dataset": "visium_human_pancreas_sub",
+      "features": 5000,
+      "observations": 1986,
+      "assays": "Spatial",
+      "modality": "Visium spatial RNA",
+      "source": "GSE254829 / GSM8058244",
+      "tutorial_role": "human spatial case",
+      "_row": "visium_human_pancreas_sub"
+    },
+    {
+      "dataset": "visium_mouse_brain_slices_sub",
+      "features": 4000,
+      "observations": 2000,
+      "assays": "Spatial",
+      "modality": "Visium spatial RNA, two slices",
+      "source": "10x Genomics / SeuratData stxBrain",
+      "tutorial_role": "multi-slice spatial case",
+      "_row": "visium_mouse_brain_slices_sub"
+    }
+  ],
+  "backend_packages": {
+    "SingleR": false,
+    "celldex": false,
+    "CellTypist": true,
+    "spacexr": false,
+    "zellkonverter": false,
+    "loomR": false,
+    "edgeR": true,
+    "harmony": true,
+    "clustree": true
+  },
+  "construction_order": ["db_scDblFinder", "JoinLayers", "ClusterTreePlot", "SCTransform", "Harmony_integrate", "RunDimsEstimate"]
+}

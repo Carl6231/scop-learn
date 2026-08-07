@@ -1,0 +1,111 @@
+---
+title: "多样本与跨数据来源整合"
+description: "生物学多样本和跨公开数据集如何分别质控、合并、整合、验证和统计建模。"
+---
+
+两种场景代码相似，但能支持的结论完全不同。
+
+## 生物学多样本 {#生物学多样本}
+
+当 `sample_id` 表示独立患者、动物或实验单位时使用此路线。先分样本计算和查看质控：
+
+审计运行时的 SCOP 自带教程对象没有真正的 condition × patient 重复设计，因此本节是可执行设计模板，不宣称已有条件比较结果；下面真实 `panc8_sub` 运行只用于技术来源整合。
+
+```r
+objects <- SplitObject(merged, split.by = "sample_id")
+objects <- lapply(objects, function(x) {
+  x[["percent.mt"]] <- PercentageFeatureSet(x, pattern = "^MT-")
+  RunCellQC(
+    x, assay = "RNA",
+    qc_metrics = c("umi", "gene", "mito", "outlier"),
+    return_filtered = FALSE
+  )
+})
+```
+
+记录每个样本的细胞数、分布和保留率。某个样本丢失 80% 细胞是研究层面警报，不能用全局阈值掩盖。
+
+完成有记录的过滤和双细胞检测后：
+
+```r
+srt <- merge(objects[[1]], y = objects[-1], add.cell.ids = names(objects))
+srt <- JoinLayers(srt)
+srt <- SCTransform(srt, assay = "RNA", vst.flavor = "v2", verbose = FALSE)
+```
+
+只有 batch 是不需要的技术差异，且没有与主要研究变量完全混杂时才整合：
+
+```r
+srt <- Harmony_integrate(
+  srt_merge = srt,
+  batch = "batch",
+  assay = "SCT",
+  normalization_method = "SCT",
+  do_normalization = FALSE,
+  HVF = VariableFeatures(srt),
+  linear_reduction_dims_use = 1:20,
+  harmony_dims_use = 1:20,
+  seed = 20260807
+)
+```
+
+## 跨数据来源整合 {#跨数据来源整合}
+
+实际案例 `panc8_sub` 有 1,600 个胰腺细胞，来自 8 个公开数据来源，每个正好 200 个细胞，覆盖 5 种技术。
+
+```r
+data(panc8_sub, package = "scop")
+srt <- JoinLayers(panc8_sub)
+srt <- SCTransform(
+  srt, assay = "RNA", new.assay.name = "SCT",
+  vst.flavor = "v2", variable.features.n = 2000,
+  verbose = FALSE
+)
+
+srt <- Harmony_integrate(
+  srt_merge = srt,
+  batch = "dataset",
+  assay = "SCT",
+  normalization_method = "SCT",
+  do_normalization = FALSE,
+  do_HVF_finding = FALSE,
+  HVF = VariableFeatures(srt),
+  do_scaling = FALSE,
+  linear_reduction_dims = 30,
+  linear_reduction_dims_use = 1:20,
+  harmony_dims_use = 1:20,
+  cluster_resolution = 0.4,
+  seed = 20260807
+)
+```
+
+![panc8 真实细胞在 Harmony 前后的变化。](../assets/figures/real-data/cross-source-integration.png){fig-alt="三幅图比较 Harmony 前的来源分离、Harmony 后的来源混合和 Harmony 后的细胞类型结构。"}
+
+## 同时验证“去除”和“保留”
+
+根据每个细胞 20 个最近邻计算：
+
+| 指标 | 整合前 | 整合后 |
+|---|---:|---:|
+| 来自其他数据来源的近邻比例 | 0.2169 | **0.6765** |
+| 与已知 cell type 相同的近邻比例 | 0.9379 | **0.9616** |
+
+cluster 多数标签与自带 cell type 的一致率为 **96.81%**。这说明该例中技术来源混合改善，已知细胞类型结构没有被抹掉。
+
+## 多数据集合并决策
+
+| 情况 | 建议 |
+|---|---|
+| 同一技术的多个样本 | 分别读取、逐样本 QC、merge，再判断是否需要整合 |
+| 同组织不同技术 | 统一 feature ID，保留 `dataset`/`tech`，整合并双向验证 |
+| 组织或生物学不兼容 | 不强迫构建共同 atlas；分开分析或映射到共同参考 |
+| condition 与 batch 完全混杂 | 任何算法都无法补回缺失设计；停止或缩小结论 |
+| 有标注参考和新 query | 做标签转移，不要为了转名字而盲目 merge |
+
+## 整合后的差异分析
+
+整合 embedding 用于近邻、聚类和可视化；pseudobulk 必须回到原始 RNA counts，按 `sample_id × cell_type` 聚合并以生物学样本拟合模型。不能把细胞数当患者重复数。
+
+::: {.boundary}
+`panc8_sub` 的 8 个来源是技术数据集，不是 8 位患者。它们可以验证整合和细胞类型信号，不能支持人群层面的结论。
+:::

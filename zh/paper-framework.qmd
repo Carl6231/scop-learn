@@ -1,0 +1,67 @@
+---
+title: "支撑整篇单细胞论文的分析框架"
+description: "用 SCOP 构建完整单细胞论文所需的图、表、检查点和结论边界。"
+---
+
+这是完整研究的骨架，不是保证每个数据集都能生成所有 panel 的流水线。
+
+## Phase 0 · 锁定科学设计
+
+先写清：队列与纳排标准；生物学样本数；主要对比与独立实验单位；技术 batch 和混杂；主要细胞群与结局；验证性/探索性分析；重复数或后端不满足时的停止规则。
+
+## Phase 1 · 数据与质控
+
+**输入：** 不可修改的原始矩阵和 sample sheet。
+**动作：** [按格式读取](input-formats.qmd)、审计元数据、逐样本 QC、双细胞和污染、记录保留细胞。
+**输出：** QC 分布、样本保留表、排除理由、RDS 检查点。
+**论文位置：** Methods + Figure 1A/B + 补充 QC。
+
+## Phase 2 · Atlas 构建
+
+`JoinLayers()` → normalization/SCT → PCA → `RunDimsEstimate()` → neighbours → 多分辨率聚类/`ClusterTreePlot()` → UMAP；只有合理时才整合。
+**输出：** 整合前后图、batch mixing 与 biology preservation 指标、cluster tree。
+**论文位置：** Figure 1C–F。
+
+## Phase 3 · 细胞注释
+
+cluster markers → 经典 markers → reference transfer / CellTypist / SingleR → 冲突审查 → final label + confidence。
+**输出：** marker dot plot/heatmap、注释证据表、不确定细胞数量。
+**论文位置：** Figure 2 + 注释补充材料。
+
+## Phase 4 · 核心研究结果
+
+对每个主要细胞类型进行：按生物学样本计算丰度；主要对比的 pseudobulk DEG；从预定义排名统计量做 enrichment/GSEA；对协变量、阈值和低计数样本做敏感性分析。
+**论文位置：** Figures 3–4，通常是推断中心。
+
+## Phase 5 · 一个连贯的机制扩展
+
+| 研究问题 | SCOP 路线 | 可辩护输出 | 边界 |
+|---|---|---|---|
+| 分化/状态转变 | `RunPAGA()`、`RunCytoTRACE()` | 排序或连通性假设 | 不是谱系证明 |
+| 配体受体假设 | `RunCellChat()` | 候选通讯网络 | 不是功能相互作用证明 |
+| 转录调控 | `RunSCENIC()` | 候选 regulon 活性 | 不是 TF 结合证明 |
+| 代谢程序 | `RunMetabolism()` | 相对通路评分 | 不是代谢物流 |
+| 恶性样状态 | `RunCNV()` | 表达推断 CNV 模式 | 需要参考与正交验证 |
+| 表型相关细胞 | `RunScissor()` | 表型相关细胞子集 | 取决于匹配 bulk 表型设计 |
+
+**论文位置：** Figure 5。不要堆五个彼此无关的工具输出。
+
+## Phase 6 · 空间验证
+
+若有空间数据：spot QC → spatial variable features → domains/networks → neighbourhoods → 基于参考的 deconvolution → 检验单细胞候选程序是否出现在预期位置。
+**论文位置：** Figure 6。严格区分 spot-level 与 cell-resolved 结论。
+
+## 每章固定交付合同
+
+1. 研究问题和理由；
+2. 输入对象与前提；
+3. 可执行代码和参数；
+4. 实际结果图/表；
+5. 可以得到的认识；
+6. 解释边界；
+7. 失败模式和替代路线；
+8. checkpoint、seed、版本与 manifest hash。
+
+## 完成门槛
+
+只有主要图能从检查点重建、样本级模型符合设计、标签有可追溯证据、缺失后端已声明、每条结论都能映射到实际结果而不是函数名时，才算完成分析。

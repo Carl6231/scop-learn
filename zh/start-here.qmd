@@ -1,53 +1,50 @@
 ---
 title: "从这里开始"
-lang: zh
+description: "根据单样本、多样本、跨数据集、注释或空间转录组任务选择正确的 SCOP Learn 路线。"
 ---
 
-## 学习路线
+这套教程按真实项目中的决策顺序组织，而不是把 314 个函数按字母排列。
 
-SCOP 最适合按照一连串决定来学习，而不是按照函数列表来学习：
+## 按你拿到的数据选择入口
 
-1. 明确生物学问题和观测单位。
-2. 确认输入格式、assay、feature 类型、样本结构和 metadata。
-3. 构建或验证 Seurat 对象。
-4. 在解释 cluster 之前检查质量。
-5. 标准化并识别可变特征。
-6. 降维、构建邻居并检查聚类稳定性。
-7. 使用 marker 和外部知识进行注释。
-8. 选择下游问题：组成、差异表达、富集、轨迹、通讯、调控或空间组织。
-9. 记录精确代码、包版本、数据身份和解释边界。
+| 你拿到的内容 | 先看 | 再做 |
+|---|---|---|
+| `filtered_feature_bc_matrix.h5` | [不同格式读取](input-formats.qmd#x-h5) | [单样本流程](single-cell-case.qmd) |
+| `matrix.mtx(.gz)` + `features.tsv(.gz)` + `barcodes.tsv(.gz)` | [10x 三件套](input-formats.qmd#x-三件套目录) | [单样本流程](single-cell-case.qmd) |
+| Seurat `.rds` | [RDS 审计](input-formats.qmd#rds) | 根据元数据进入相应流程 |
+| `.h5ad` / `.loom` | [格式转换](input-formats.qmd#h5ad-与-loom) | 先确认转换没有丢失信息 |
+| 多个生物学样本 | [多样本设计](multi-sample.qmd#生物学多样本) | 注释、pseudobulk、高级分析 |
+| 多个公开数据集/平台 | [跨来源整合](multi-sample.qmd#跨数据来源整合) | 同时验证来源混合和生物学保留 |
+| Visium / 空间 Seurat 对象 | [空间转录组](spatial-case.qmd) | spot 质控 → 空间特征 → 邻域 → 可选去卷积 |
 
-## 第一个检查点
+## 固定的构建顺序
+
+::: {.workflow-map}
+**运行时预检 → 按样本审计与质控 → `db_scDblFinder()` → `JoinLayers()` → 多分辨率聚类 / `ClusterTreePlot()` → 在确有整合需要时使用 `SCTransform()` + `Harmony_integrate()` → `RunDimsEstimate()` → 证据化注释 → 围绕问题选择下游分析 → 报告与检查点**
+:::
+
+这是一条默认构建合同，不是要求所有对象都做 Harmony。单个质量良好的样本通常不需要批次整合；疾病比较必须先有生物学样本设计，不能先看 UMAP 再补研究问题。
+
+## 最低元数据合同
+
+在分析前明确并永久保留这些字段：
 
 ```r
-library(Seurat)
-library(scop)
+required <- c("sample_id", "condition", "patient_id", "batch")
+stopifnot(all(required %in% colnames(srt[[]])))
 
-srt <- CreateSeuratObject(counts = counts, project = "my-study")
-srt <- RunCellQC(
-  srt,
-  qc_metrics = c("umi", "gene", "mito"),
-  UMI_threshold = 300,
-  gene_threshold = 100,
-  verbose = FALSE
-)
+table(srt$sample_id, srt$condition)
+table(srt$sample_id, srt$batch)
 ```
 
-阈值取决于研究设计。它们必须被作为显式决定记录，而不是当成通用常量。
+`dataset`/`technology` 表示技术来源，`sample_id` 表示独立实验单位，二者不能互换。
 
-## SCOP 构建顺序
+## 进入高级分析前的三个检查点
 
-对于包级工作流，保持这个顺序并逐个检查接口：
+1. **对象检查点：** counts、features、barcodes、assays、layers、元数据和样本身份完整。
+2. **生物学检查点：** marker 与预期细胞群一致，整合没有抹掉研究变量。
+3. **推断检查点：** 统计模型的独立单位与研究设计一致。多样本研究以 pseudobulk 为主要差异表达路径；细胞层面检验只作为探索/marker 分析。
 
-`db_scDblFinder()` → `JoinLayers()` → `clustertree()` → `SCTransform()` + `Harmony_integrate()` 或 `Harmony()` → `RunDimsEstimate()` → 下游分析。
+## 本站证据的运行时
 
-具体函数和参数必须在使用前根据目标 SCOP 版本和上游参考重新核对。
-
-## 继续之前
-
-- 你能说清一个 cell 或 spot 代表什么吗？
-- 你知道每一步使用哪个 assay 和 layer 吗？
-- 你能解释哪些细胞被过滤以及为什么吗？
-- 你能区分描述性图形和生物学结论吗？
-
-[继续阅读核心概念 →](concepts.html)
+当前结果使用 **R 4.5.1、SCOP 0.8.9、Seurat 5.5.0**，固定随机种子 `20260807`。比较精确数值前请先看[复现记录](reproducibility.qmd)。

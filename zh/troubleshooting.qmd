@@ -1,36 +1,38 @@
 ---
-title: "故障排查"
-lang: zh
+title: "故障排查决策表"
+description: "SCOP 输入、layer、质控、整合、注释、可选后端和空间坐标故障的证据化处理。"
 ---
 
-## 先确定边界
+| 表现 | 先检查 | 常见原因 | 处理 |
+|---|---|---|---|
+| `Read10X()` 说缺 barcode | 目录文件列表 | 缺 `.gz`、目录层级错、文件改名 | 恢复标准三件套名称并放同一目录 |
+| H5 返回 list | `names(raw)` | 含多种 feature type | 选 `Gene Expression`，其他模态分开保存 |
+| feature 重名 | `duplicated(rownames(srt))` | gene symbol 冲突 | 读取时唯一化或保留稳定 ID，记录映射 |
+| “layer is empty” | `Layers(srt[[assay]])` | 只有 counts 或 layer 选错 | join/选择正确 layer，不虚构已归一化数据 |
+| QC 删除某样本多数细胞 | 逐样本分布与保留率 | 阈值不匹配或建库失败 | 单独审查该样本，不用全局阈值掩盖 |
+| 双细胞调用失败 | counts 是否整数、每样本细胞数、版本 | 输入不是原始 counts 或后端不兼容 | 回到 raw counts 按样本运行，记录失败 |
+| Harmony 把 cell types 混在一起 | 整合前后 marker/近邻 | 过度校正或 batch 混杂 | 减少校正、换 batch，或停止整合 |
+| batch 仍分开 | 来源与生物学图 | 真实生物差异、无共同群或校正不足 | 不强迫混合；检查共同群与特征空间 |
+| 标签转移错误 | marker、score、参考覆盖 | 参考不匹配 | 换参考或保留 unknown，不能只看 confidence |
+| `RunLabelTransfer()` 要 ChromatinAssay | assay class | SCOP 路线用于 ATAC/multiome | 普通 RNA-to-RNA 用 Seurat anchors |
+| CellTypist 反复准备 Python | SCOP 环境日志 | 环境/模型初始化 | 让托管环境完成，记录模型与版本 |
+| `RunRCTD()` 不可用 | `requireNamespace("spacexr")` | 缺后端 | 安装并验证，或声明去卷积未执行 |
+| 空间图镜像/平移 | 坐标列和图像尺度 | 混用坐标空间 | 所有空间函数使用同一已声明空间 |
+| DEG P 值极小但无重复 | sample count 和 design matrix | 把细胞当重复 | 按生物学样本聚合并重做 pseudobulk |
 
-遇到工作流失败时，先将问题分类为输入、对象或 layer、依赖、方法、资源或解释问题。不要同时改变多个科学决定来掩盖一个错误。
+## 最小诊断包
 
-## 常见症状
+```r
+list(
+  dimensions = dim(srt),
+  assays = Assays(srt),
+  default_assay = DefaultAssay(srt),
+  layers = Layers(srt[[DefaultAssay(srt)]]),
+  reductions = Reductions(srt),
+  graphs = Graphs(srt),
+  metadata = colnames(srt[[]])
+)
+sessionInfo()
+```
 
-### “No requested features are present”
-
-检查活动 assay、layer、feature 名称，以及是否完成标准化或可变特征选择。包已安装不代表对象状态正确。
-
-### 所有细胞都被过滤
-
-先查看真实 count 和 feature 分布，再选择阈值。小型合成 fixture 可能需要宽松阈值来做软件 smoke test；这不是研究建议。
-
-### 缺少 reduction 或 graph
-
-检查执行顺序和输入维度。加载包不会自动创建 reduction。
-
-### 空间函数没有结果
-
-确认坐标列、坐标空间、assay layer 和最小 spot 数，然后确认所选后端是否安装。缺失可选后端必须明确报告。
-
-### 图看起来很有说服力，但结论很弱
-
-回到采样单位、重复、设计和证据边界。干净的图不能替代有效的 estimand。
-
-## 升级前先复现
-
-保存最小输入、完整错误文本、`sessionInfo()`、`packageVersion("scop")` 和函数调用。分享前移除本地路径和私有标识。
-
-[上游函数参考](https://mengxu98.github.io/scop/reference/)负责签名；本页负责工作流解释和恢复。
+保存精确错误、前一条调用和这个诊断包。只有一张 UMAP 截图不足以诊断对象。

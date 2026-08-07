@@ -1,37 +1,38 @@
 ---
-title: "Troubleshooting"
+title: "Troubleshooting decision guide"
+description: "Evidence-based fixes for SCOP input, layer, QC, integration, annotation, optional backend, and spatial-coordinate failures."
 ---
 
-## Start with the boundary
+| Symptom | First evidence to inspect | Likely cause | Scoped response |
+|---|---|---|---|
+| `Read10X()` says barcodes missing | directory listing | missing `.gz`, wrong directory level, or renamed file | restore the standard three-file names and keep all three together |
+| H5 returns a list | `names(raw)` | multi-feature 10x file | select `raw[["Gene Expression"]]`; keep antibody/peak matrices separately |
+| duplicated features | `sum(duplicated(rownames(srt)))` | gene-symbol collisions | read with unique features or retain stable IDs; document mapping |
+| “layer is empty” | `Layers(srt[[assay]])` | counts-only object or wrong layer | join/select the intended layer; do not pretend normalised data exists |
+| QC removes most of one sample | per-sample distributions and retained counts | threshold mismatch or failed library | review the sample separately; do not hide it with global thresholds |
+| doublet call fails | counts integerness, cells per sample, package version | non-count input or backend mismatch | return to raw counts and run per sample; record the failure |
+| Harmony mixes cell types | pre/post marker and neighbour checks | overcorrection or confounded batch | reduce correction, change batch variable, or stop integration |
+| batches remain separated | source and biology plots | true biology, insufficient overlap, or undercorrection | do not force mixing; test shared populations and feature space |
+| label transfer is wrong | markers, prediction score, reference coverage | reference mismatch | use a better reference or retain `unknown`; do not relabel by confidence alone |
+| `RunLabelTransfer()` asks for ChromatinAssay | assay classes | SCOP path is for ATAC/multiome transfer | use Seurat anchors for generic RNA-to-RNA transfer |
+| CellTypist prepares Python repeatedly | SCOP environment log | environment/model bootstrap | let the managed environment finish; record model and versions |
+| `RunRCTD()` unavailable | `requireNamespace("spacexr")` | missing backend | install and validate `spacexr`, or declare deconvolution not executed |
+| spatial plot is mirrored or shifted | coordinate columns and image scale | mixed coordinate spaces | use one declared coordinate space across all spatial functions |
+| DEG has tiny P values but no replication | sample count and design matrix | cells treated as replicates | aggregate counts by biological sample and refit pseudobulk |
 
-When a workflow fails, first classify the failure as input, object/layer, dependency, method, resource, or interpretation. Do not patch an error by changing several scientific decisions at once.
+## Minimal diagnostic bundle
 
-## Common symptoms
+```r
+list(
+  dimensions = dim(srt),
+  assays = Assays(srt),
+  default_assay = DefaultAssay(srt),
+  layers = Layers(srt[[DefaultAssay(srt)]]),
+  reductions = Reductions(srt),
+  graphs = Graphs(srt),
+  metadata = colnames(srt[[]])
+)
+sessionInfo()
+```
 
-### “No requested features are present”
-
-Check the active assay, layer, feature names, and whether normalization or variable-feature selection was performed. A function can be installed and still receive the wrong object state.
-
-### Every cell is filtered
-
-Inspect the actual count and feature distributions before selecting thresholds. Tiny synthetic fixtures often need deliberately permissive thresholds for a software smoke test; those thresholds are not study recommendations.
-
-### A reduction or graph is missing
-
-Check the order of operations and the dimensions supplied. A reduction is not created merely because the package is loaded.
-
-### A spatial function returns no result
-
-Confirm coordinate columns, coordinate space, assay layer, and minimum spot count. Then check whether the selected backend is installed. Missing optional backends should be reported explicitly.
-
-### The plot looks convincing but the claim is weak
-
-Return to the sampling unit, replication, design, and evidence boundary. A clean visualization is not a substitute for a supported estimand.
-
-## Reproduce before escalating
-
-Save the smallest input, the exact error text, `sessionInfo()`, `packageVersion("scop")`, and the function call. Remove local paths and private identifiers before sharing.
-
-## Reference
-
-Use the [upstream function reference](https://mengxu98.github.io/scop/reference/) for signatures, then return here for workflow interpretation and recovery.
+Save the exact error, the preceding call, and this bundle. A screenshot of a UMAP alone is not enough to diagnose an object.

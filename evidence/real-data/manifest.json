@@ -1,0 +1,85 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-08-08 00:56:36 CST",
+  "seed": 20260807,
+  "components": {
+    "runtime": {
+      "path": "evidence/real-data/runtime.json",
+      "sha256": "43ba486bd87dc7f1835e14349cc88820d669a2debb3f12225bf0f4e97dce22e6"
+    },
+    "input-formats": {
+      "path": "evidence/real-data/input-formats.json",
+      "sha256": "15407d1bc0a0c0bbbc31b97d41bf122b8e3f059d150319a8aea77c2fc7a1bd24"
+    },
+    "single-sample": {
+      "path": "evidence/real-data/single-sample.json",
+      "sha256": "7016237474ef445f68dfec6095dd5d7ee0153b8dd04613ca3d022d4973063b79"
+    },
+    "cross-source": {
+      "path": "evidence/real-data/cross-source.json",
+      "sha256": "e6cc549787826b0c30662038362b93d3156144d7db79feac1773571484f28ad2"
+    },
+    "annotation": {
+      "path": "evidence/real-data/annotation.json",
+      "sha256": "2f4553dbb0fc8bbfa71e8381a1bd3f4c15148d7ac37163a24a93f2375d514759"
+    },
+    "advanced": {
+      "path": "evidence/real-data/advanced.json",
+      "sha256": "2f6e2b2dc80a450717e82a51ed93b9bb98ac8d9c8842f94083a0bf04f6084150"
+    },
+    "spatial": {
+      "path": "evidence/real-data/spatial.json",
+      "sha256": "4c450f01e6f8e9724f9b2c7639fbdc8c7a8debcf0539e2832cb25ed92445a997"
+    }
+  },
+  "figures": {
+    "advanced-pseudobulk.png": {
+      "path": "assets/figures/real-data/advanced-pseudobulk.png",
+      "sha256": "bff34e47e623afe15b19e33906fb12a149cc23c13cea2fce3b97a1e8043cf906",
+      "bytes": 173587
+    },
+    "annotation-marker-evidence.png": {
+      "path": "assets/figures/real-data/annotation-marker-evidence.png",
+      "sha256": "c7272007a11c372ad660d5177b7fc159c688e78761315d277e546eaa792d98c0",
+      "bytes": 81228
+    },
+    "cross-source-integration.png": {
+      "path": "assets/figures/real-data/cross-source-integration.png",
+      "sha256": "f63a02f54388d5b9765534c11a03adcb553f8ef60cacd61501619f371d234ee8",
+      "bytes": 238885
+    },
+    "single-cluster-tree.png": {
+      "path": "assets/figures/real-data/single-cluster-tree.png",
+      "sha256": "a54aee0d086341447a17c89453b2e443ee6de9768d46b46e73a395f197c519b3",
+      "bytes": 87291
+    },
+    "single-qc.png": {
+      "path": "assets/figures/real-data/single-qc.png",
+      "sha256": "7088a8b44d7de0e282ea2a9d89331c33a4a202071bd9da54b759ada2b82bbfdd",
+      "bytes": 93139
+    },
+    "single-umap.png": {
+      "path": "assets/figures/real-data/single-umap.png",
+      "sha256": "4c707faa64c6a0458c9b19bce5ebd626d94f6ee40edfa240f9f119cfc314e342",
+      "bytes": 152348
+    },
+    "spatial-human-pancreas.png": {
+      "path": "assets/figures/real-data/spatial-human-pancreas.png",
+      "sha256": "840348db84c940a4dac94af433ed078117a61b4e01833ed0e919a8aa9c63d0be",
+      "bytes": 561920
+    },
+    "spatial-mouse-brain-slices.png": {
+      "path": "assets/figures/real-data/spatial-mouse-brain-slices.png",
+      "sha256": "af15731bfdb487558cfa3fc75093ef58f5f9acda4fe59930c14654529671260b",
+      "bytes": 285153
+    }
+  },
+  "critical_assertions": {
+    "real_10x_roundtrip": true,
+    "single_sample_retained_cells": true,
+    "cross_source_has_harmony": true,
+    "pseudobulk_has_results": true,
+    "spatial_has_moran_features": true,
+    "no_synthetic_primary_evidence": true
+  }
+}

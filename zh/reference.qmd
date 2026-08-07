@@ -1,22 +1,44 @@
 ---
-title: "参考入口"
-lang: zh
+title: "SCOP 函数任务入口"
+description: "按输入、质控、整合、注释、高级分析、空间和可视化任务查找 SCOP 函数。"
 ---
 
-## 保持一个 API 权威来源
+本页负责从研究任务路由到函数与教程；精确参数和当前上游文档请使用 [SCOP reference index](https://mengxu98.github.io/scop/reference/)。
 
-生成的函数参考由上游维护。精确参数、默认值、返回值和包级示例请使用：
+| 任务 | 主要函数 | 教程 |
+|---|---|---|
+| 自带数据/转换 | `LoadScopDataset()`、`FetchH5()`、`h5ad_to_srt()`、`loom_to_srt()` | [输入](input-formats.qmd) |
+| 细胞 QC | `RunCellQC()`、`db_scDblFinder()`、`RunDecontX()` | [单样本](single-cell-case.qmd) |
+| spot QC | `RunSpotQC()` | [空间](spatial-case.qmd) |
+| 整合 | `Harmony_integrate()`、`CCA_integrate()`、`RPCA_integrate()`、`scVI_integrate()` | [多样本](multi-sample.qmd) |
+| 维度选择 | `RunDimsEstimate()` | [单样本](single-cell-case.qmd) |
+| 聚类稳定性 | `ClusterTreePlot()` | [单样本](single-cell-case.qmd) |
+| marker / DEG | `FindMarkers()`、`FindAllMarkers()` | [单样本](single-cell-case.qmd)、[高级](advanced.qmd) |
+| 注释 | `RunCellTypist()`、`RunSingleR()`、`RunLabelTransfer()` | [注释](annotation.qmd) |
+| 富集 | `RunEnrichment()`、`RunGSEA()` | [高级](advanced.qmd) |
+| 比例 | `RunPropeller()`、`RunProportionTest()` | [高级](advanced.qmd) |
+| 轨迹 | `RunPAGA()`、`RunCytoTRACE()` | [高级](advanced.qmd) |
+| 通讯 | `RunCellChat()`、`RunSpatialCellChat()` | [高级](advanced.qmd) |
+| 调控/代谢 | `RunSCENIC()`、`RunMetabolism()` | [高级](advanced.qmd) |
+| 恶性/表型 | `RunCNV()`、`RunScissor()` | [高级](advanced.qmd) |
+| 空间特征/图 | `RunSpatialVariableFeatures()`、`RunSpatialNetwork()`、`RunSpatialNeighborhood()` | [空间](spatial-case.qmd) |
+| 去卷积/整合 | `RunRCTD()`、`RunSpatialIntegration()` | [空间](spatial-case.qmd) |
 
-<https://mengxu98.github.io/scop/reference/>
+## 如何选择整合方法
 
-SCOP Learn 在函数周围增加教学层，但不复制或覆盖生成式 API 页面。
+| 方法 | 适用情况 | 关键前提 |
+|---|---|---|
+| Harmony | 有共享细胞状态，需要高效批次校正 | 正确 batch 字段和 biology preservation 验证 |
+| CCA | 多数据集存在共享相关结构 | 共同 features 和足够群体重叠 |
+| RPCA | 相关大数据集的保守 anchor 整合 | 各数据内部 PCA 和共同群体 |
+| scVI | 需要非线性潜变量且数据量足够 | 可工作的 Python 后端与版本锁定 |
 
-## 推荐入口
+## 在本机确认函数
 
-- [RunStandardWorkflow](https://mengxu98.github.io/scop/reference/RunStandardWorkflow.html)
-- [RunCellQC](https://mengxu98.github.io/scop/reference/RunCellQC.html)
-- [RunDimsEstimate](https://mengxu98.github.io/scop/reference/RunDimsEstimate.html)
-- [RunSpatialNetwork](https://mengxu98.github.io/scop/reference/RunSpatialNetwork.html)
-- [RunSpatialVariableFeatures](https://mengxu98.github.io/scop/reference/RunSpatialVariableFeatures.html)
+```r
+"Harmony_integrate" %in% getNamespaceExports("scop")
+args(scop::Harmony_integrate)
+help("Harmony_integrate", package = "scop")
+```
 
-如果某个链接页面改变或消失，站点链接检查应当失败，课程必须在发布前重新审阅。
+本站运行时有 314 个导出函数。如果你的版本不同，以本机 help 与版本为准，并记录差异。

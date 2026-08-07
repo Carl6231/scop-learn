@@ -1,47 +1,65 @@
 ---
-title: "Reproducibility"
+title: "Reproduce the published evidence"
+description: "Exact runtime, seed, source H5 hash, checkpoints, manifests, generated figures, and rebuild commands for SCOP Learn."
 ---
 
-## Version lock
-
-The first published cases were executed locally with:
+## Audited runtime
 
 - R 4.5.1
 - SCOP 0.8.9
-- Seurat and ggplot2 from the installed environment
-- Quarto 1.10.18 for site rendering
-- Synthetic, repository-owned inputs generated with fixed random seeds
+- Seurat 5.5.0
+- seed `20260807`
+- 314 SCOP namespace exports
 
-The live upstream reference may describe a different release. Every case page therefore states its target version, and the build records the current site commit separately from the analysis identity.
+The package versions and optional-backend status are recorded in [runtime.json](evidence/real-data/runtime.json); complete session output is in [session-info.txt](evidence/real-data/session-info.txt).
 
-## Evidence manifests
+## Rebuild
 
-Each complete case stores a JSON manifest containing:
-
-- case name and scope
-- data dimensions and seed
-- package versions
-- workflow functions
-- result summary
-- generated figure path and SHA-256 hash
-- known limitations
-
-These manifests are not a substitute for study-level provenance; they make the tutorial claim auditable.
-
-## Build policy
-
-- Lightweight static content is rendered in GitHub Actions.
-- The case scripts are run deliberately and their outputs are reviewed before publication.
-- Heavy or optional backends are labeled when not rerun by the Pages build.
-- No CI job downloads private data or depends on an absolute local path.
-- A site release is traceable to a Git commit and a Quarto version.
-
-## Re-run locally
+From the repository root:
 
 ```bash
-Rscript scripts/single-cell-case.R
-Rscript scripts/spatial-case.R
+mkdir -p artifacts/real-data/input
+curl -L --fail \
+  -o artifacts/real-data/input/pbmc_1k_v3_filtered_feature_bc_matrix.h5 \
+  https://cf.10xgenomics.com/samples/cell-exp/3.0.0/pbmc_1k_v3/pbmc_1k_v3_filtered_feature_bc_matrix.h5
+
+Rscript scripts/build-real-evidence.R
 quarto render
 ```
 
-Inspect the actual PNGs and the generated HTML before pushing `main`.
+The expected H5 SHA-256 is:
+
+```text
+8191f576550c1b449d03441b9eb098ee9f73fa82513d171ba87d31d551e3ffda
+```
+
+## Evidence chain
+
+The [top-level manifest](evidence/real-data/manifest.json) hashes seven component manifests and every published real-data figure. It asserts:
+
+- exact H5 → three-file and H5 → RDS round-trip checks;
+- more than 900 cells retained in the single-sample workflow;
+- a real Harmony reduction in the cross-source workflow;
+- a non-empty pseudobulk result;
+- at least 20 Moran-ranked spatial features;
+- no synthetic primary evidence.
+
+Large RDS checkpoints are regenerated locally under `artifacts/` and intentionally excluded from Git. Their SHA-256 hashes and byte sizes are recorded in component manifests.
+
+## What is deterministic and what is external
+
+The R seed fixes stochastic steps used here. Exact floating-point or UMAP coordinates can still vary with platform and dependency versions. CellTypist additionally depends on the Python environment and `Immune_All_Low.pkl`; the evidence manifest records the executed model and result summary.
+
+## Evidence files
+
+- [input formats](evidence/real-data/input-formats.json)
+- [single sample](evidence/real-data/single-sample.json)
+- [cross source](evidence/real-data/cross-source.json)
+- [annotation](evidence/real-data/annotation.json)
+- [advanced](evidence/real-data/advanced.json)
+- [spatial](evidence/real-data/spatial.json)
+- [full evidence builder](scripts/build-real-evidence.R)
+
+## Synthetic legacy examples
+
+The former synthetic cases are retained only as code-level smoke tests in the repository. They are not used as the curriculum’s biological evidence.

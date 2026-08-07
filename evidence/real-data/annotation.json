@@ -1,0 +1,62 @@
+{
+  "dataset": "pbmcmultiome_sub",
+  "cells": 500,
+  "truth_labels": {
+    "B": 84,
+    "CD4 T": 84,
+    "CD8 T": 83,
+    "DC": 83,
+    "Mono": 83,
+    "NK": 83
+  },
+  "marker_panel": ["MS4A1", "CD79A", "CD3D", "IL7R", "CD8A", "NKG7", "GNLY", "LYZ", "S100A8", "FCGR3A", "FCER1A"],
+  "manual_marker_evidence": {
+    "executed": true,
+    "figure": {
+      "path": "assets/figures/real-data/annotation-marker-evidence.png",
+      "sha256": "c7272007a11c372ad660d5177b7fc159c688e78761315d277e546eaa792d98c0"
+    }
+  },
+  "label_transfer": {
+    "executed": true,
+    "method": "Seurat::FindTransferAnchors + TransferData",
+    "reference_cells": 302,
+    "query_cells": 198,
+    "accuracy_against_held_out_CellType": 0.9343,
+    "mean_prediction_score": 0.9027
+  },
+  "celltypist": {
+    "executed": true,
+    "method": "scop::RunCellTypist",
+    "model": "Immune_All_Low.pkl",
+    "predicted_labels": {
+      "Age-associated B cells": 7,
+      "CD16+ NK cells": 72,
+      "CD16- NK cells": 7,
+      "Classical monocytes": 79,
+      "DC1": 3,
+      "DC2": 41,
+      "MAIT cells": 4,
+      "Memory B cells": 43,
+      "Mono-mac": 1,
+      "Naive B cells": 30,
+      "Non-classical monocytes": 21,
+      "Regulatory T cells": 6,
+      "Tcm/Naive cytotoxic T cells": 39,
+      "Tcm/Naive helper T cells": 84,
+      "Tem/Effector helper T cells": 8,
+      "Tem/Effector helper T cells PD1+": 1,
+      "Tem/Temra cytotoxic T cells": 14,
+      "Tem/Trm cytotoxic T cells": 15,
+      "pDC": 25
+    },
+    "median_confidence": 0.9977,
+    "comparison_note": "The model uses finer immune labels than the six bundled broad CellType classes, so no forced one-to-one accuracy is reported."
+  },
+  "scop_RunLabelTransfer_scope": "RunLabelTransfer is intended for a ChromatinAssay/multiome transfer path; generic RNA-to-RNA transfer is shown with Seurat anchors.",
+  "singler": {
+    "executed": false,
+    "reason": "SingleR and celldex are not installed in the audited runtime."
+  },
+  "rule": "Automated labels are hypotheses; marker coherence, cluster context, dataset biology and uncertainty must be reviewed together."
+}

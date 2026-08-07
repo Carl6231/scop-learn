@@ -57,6 +57,9 @@ function Meta(meta)
   local base = BASE
   local site_name = SITE_NAME
   local description = stringify(meta, "description") or DESCRIPTION
+  -- This filter emits the canonical description tag. Clear the source field so
+  -- Quarto cannot emit a second copy through its website metadata path.
+  meta.description = nil
 
   local english = translated_url(base, route, "en")
   local chinese = translated_url(base, route, "zh")

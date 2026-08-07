@@ -1,0 +1,84 @@
+---
+title: "Paper-scale analysis framework"
+description: "A reproducible figure, table, checkpoint, and claim framework for a complete single-cell paper using SCOP."
+---
+
+This is a scaffold for a complete study—not a promise that every dataset can support every panel.
+
+## Phase 0 · Lock the scientific design
+
+Write down:
+
+- cohort, inclusion/exclusion and biological sample count;
+- primary contrast and independent experimental unit;
+- technical batches and known confounders;
+- primary cell populations and outcomes;
+- confirmatory versus exploratory analyses;
+- stop rules when replication or backend requirements fail.
+
+## Phase 1 · Data and QC
+
+**Inputs:** raw matrices and immutable sample sheet.
+**Actions:** [read format](input-formats.qmd), audit metadata, calculate per-sample QC, doublets and contamination, record retained cells.
+**Outputs:** QC distributions, sample-retention table, excluded-cell reasons, checkpoint.
+**Paper role:** Methods + Figure 1A/B + Supplementary QC.
+
+## Phase 2 · Atlas construction
+
+**Actions:** `JoinLayers()` → normalization/SCT → PCA → `RunDimsEstimate()` → neighbours → multi-resolution clustering / `ClusterTreePlot()` → UMAP; integration only when justified.
+**Outputs:** pre/post-integration plots, batch-mixing and biology-preservation checks, resolution tree.
+**Paper role:** Figure 1C–F.
+
+## Phase 3 · Annotation
+
+**Actions:** cluster markers → canonical markers → reference transfer / CellTypist / SingleR → conflict review → final label + confidence.
+**Outputs:** marker dot plot/heatmap, annotation provenance table, uncertain-cell count.
+**Paper role:** Figure 2 + annotation supplement.
+
+## Phase 4 · Core study result
+
+For each major cell type:
+
+- abundance by biological sample;
+- pseudobulk DEG for the primary contrast;
+- enrichment/GSEA from a defined ranked statistic;
+- sensitivity checks for covariates, thresholds, and low-count samples.
+
+**Paper role:** Figures 3–4. This is usually the inferential centre of the paper.
+
+## Phase 5 · One coherent mechanistic extension
+
+Choose only modules that support the main question:
+
+| Question | SCOP path | Defensible output | Boundary |
+|---|---|---|---|
+| differentiation or state transition | `RunPAGA()`, `RunCytoTRACE()` | ordering / connectivity hypothesis | not lineage proof |
+| ligand–receptor hypothesis | `RunCellChat()` | candidate signalling network | not functional interaction proof |
+| transcriptional control | `RunSCENIC()` | candidate regulon activity | not TF binding proof |
+| metabolic programme | `RunMetabolism()` | relative pathway score | not metabolite flux |
+| malignancy-like state | `RunCNV()` | expression-derived CNV pattern | requires reference and orthogonal validation |
+| phenotype-linked cells | `RunScissor()` | phenotype-associated cell subset | depends on matched bulk phenotype design |
+
+**Paper role:** Figure 5. Avoid five disconnected tool outputs.
+
+## Phase 6 · Spatial validation
+
+If spatial data exists: spot QC → spatially variable features → domains/networks → neighbourhoods → reference-based deconvolution → test whether the single-cell candidate programme localises as expected.
+**Paper role:** Figure 6. Keep spot-level and cell-resolved claims separate.
+
+## Deliverable contract per chapter
+
+Every analysis chapter should contain:
+
+1. question and rationale;
+2. input object and prerequisites;
+3. executable code and parameters;
+4. actual output figure/table;
+5. expected insight;
+6. interpretation boundary;
+7. failure modes and alternative route;
+8. checkpoint, seed, versions, and manifest hash.
+
+## Completion gate
+
+A study is analysis-complete only when all primary figures regenerate from checkpoints, sample-level models match the design, labels have traceable evidence, missing optional backends are declared, and every conclusion maps to a result—not merely to a method name.

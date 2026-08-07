@@ -30,6 +30,16 @@ jobs:
           test -f _site/zh/single-cell-case.html
           test -f _site/spatial-case.html
           test -f _site/zh/spatial-case.html
+          test -f _site/input-formats.html
+          test -f _site/zh/input-formats.html
+          test -f _site/multi-sample.html
+          test -f _site/zh/multi-sample.html
+          test -f _site/annotation.html
+          test -f _site/zh/annotation.html
+          test -f _site/advanced.html
+          test -f _site/zh/advanced.html
+          test -f _site/paper-framework.html
+          test -f _site/zh/paper-framework.html
           test -f _site/404.html
           ! rg -n '(/Users/|/home/|gho_|github_pat_|localhost:|sample_id=)' _site
           ! rg -n 'href="(undefined|null)"' _site
@@ -62,7 +72,8 @@ jobs:
                   canonical = base + ("zh/" if language == "zh" else "") + route
               text = path.read_text(encoding="utf-8")
               assert len(re.findall(r"<title>.*?</title>", text, re.S)) == 1, rel
-              assert len(re.findall(r'<meta name="description"', text)) == 1, rel
+              description_tags = re.findall(r'<meta name="description"[^>]*>', text)
+              assert len(description_tags) == 1, (rel, description_tags)
               assert re.findall(r'<link rel="canonical" href="([^"]+)"', text) == [canonical], rel
               expected_en = base + ("" if route == "index.html" else route)
               expected_zh = base + "zh/" + ("" if route == "index.html" else route)
@@ -76,6 +87,52 @@ jobs:
         run: |
           test -s evidence/single-cell-case.json
           test -s evidence/spatial-case.json
+          test -s evidence/real-data/manifest.json
+          test -s evidence/real-data/input-formats.json
+          test -s evidence/real-data/single-sample.json
+          test -s evidence/real-data/cross-source.json
+          test -s evidence/real-data/annotation.json
+          test -s evidence/real-data/advanced.json
+          test -s evidence/real-data/spatial.json
+          test -s assets/figures/real-data/single-umap.png
+          test -s assets/figures/real-data/cross-source-integration.png
+          test -s assets/figures/real-data/spatial-human-pancreas.png
+      - name: Validate real-data evidence chain
+        run: |
+          python3 - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          manifest = json.loads(Path("evidence/real-data/manifest.json").read_text())
+          assert all(manifest["critical_assertions"].values()), manifest["critical_assertions"]
+          assert len(manifest["components"]) == 7
+          assert len(manifest["figures"]) >= 8
+
+          def sha256(path):
+              return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+          for name, item in manifest["components"].items():
+              assert Path(item["path"]).is_file(), name
+              assert sha256(item["path"]) == item["sha256"], name
+          for name, item in manifest["figures"].items():
+              assert Path(item["path"]).is_file(), name
+              assert sha256(item["path"]) == item["sha256"], name
+
+          inputs = json.loads(Path("evidence/real-data/input-formats.json").read_text())
+          assert inputs["features"] == 33538 and inputs["cells"] == 1222
+          assert all(inputs["validations"].values())
+
+          single = json.loads(Path("evidence/real-data/single-sample.json").read_text())
+          cross = json.loads(Path("evidence/real-data/cross-source.json").read_text())
+          annotation = json.loads(Path("evidence/real-data/annotation.json").read_text())
+          spatial = json.loads(Path("evidence/real-data/spatial.json").read_text())
+          assert single["after"]["cells"] == 979
+          assert "Harmony" in cross["reductions"]
+          assert annotation["celltypist"]["executed"] is True
+          assert spatial["deconvolution"]["executed"] is False
+          print("Real-data manifests, hashes, execution states, and claim boundaries verified")
+          PY
       - name: Check links and accessibility structure
         run: |
           python3 - <<'PY'

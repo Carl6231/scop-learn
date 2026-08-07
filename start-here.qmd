@@ -1,52 +1,50 @@
 ---
 title: "Start here"
+description: "Choose the correct SCOP Learn path for one sample, many samples, cross-dataset integration, annotation, or spatial transcriptomics."
 ---
 
-## The route
+This course is organised around decisions you must make in a real project, not around an alphabetical function list.
 
-SCOP is easiest to learn as a sequence of decisions, not as a list of functions:
+## Choose your entry point
 
-1. Define the biological question and the unit of observation.
-2. Confirm the input format, assay, feature type, sample structure, and metadata.
-3. Build or validate the Seurat object.
-4. Inspect quality before interpreting clusters.
-5. Normalize and identify variable features.
-6. Reduce dimensions, build neighbors, and inspect cluster stability.
-7. Annotate with markers and external knowledge.
-8. Choose a downstream question: abundance, differential expression, enrichment, trajectory, communication, regulation, or spatial organization.
-9. Record the exact code, package version, data identity, and interpretation boundary.
+| What you received | Begin with | Continue to |
+|---|---|---|
+| `filtered_feature_bc_matrix.h5` | [Input formats](input-formats.qmd#10x-h5) | [Single sample](single-cell-case.qmd) |
+| `matrix.mtx(.gz)` + `features.tsv(.gz)` + `barcodes.tsv(.gz)` | [Input formats](input-formats.qmd#10x-three-file-directory) | [Single sample](single-cell-case.qmd) |
+| `.rds` Seurat object | [Input formats](input-formats.qmd#rds) | Audit metadata, then the relevant workflow |
+| `.h5ad` / `.loom` | [Input formats](input-formats.qmd#h5ad-and-loom) | Verify conversion loss before analysis |
+| Several biological samples | [Multi-sample](multi-sample.qmd#biological-multi-sample-design) | [Annotation](annotation.qmd), [advanced](advanced.qmd) |
+| Several public datasets or technologies | [Multi-sample](multi-sample.qmd#cross-source-integration) | Validate mixing *and* biology preservation |
+| Visium / spatial Seurat object | [Spatial](spatial-case.qmd) | Spot QC → spatial features → neighbourhoods → optional deconvolution |
 
-## A minimal first checkpoint
+## The construction contract
+
+::: {.workflow-map}
+**Runtime preflight → per-sample audit/QC → `db_scDblFinder()` → `JoinLayers()` → multi-resolution clustering / `ClusterTreePlot()` → `SCTransform()` + `Harmony_integrate()` when integration is justified → `RunDimsEstimate()` → annotation evidence → question-specific downstream analysis → reports and checkpoints**
+:::
+
+This is a default construction order, not a command to integrate everything. A single clean sample may not need Harmony. A disease comparison needs biological sample identity and a study design before it needs a UMAP.
+
+## Minimum object contract
+
+Before analysis, make these fields explicit and never silently reconstruct them later:
 
 ```r
-library(Seurat)
-library(scop)
+required <- c("sample_id", "condition", "patient_id", "batch")
+stopifnot(all(required %in% colnames(srt[[]])))
 
-srt <- CreateSeuratObject(counts = counts, project = "my-study")
-srt <- RunCellQC(
-  srt,
-  qc_metrics = c("umi", "gene", "mito"),
-  UMI_threshold = 300,
-  gene_threshold = 100,
-  verbose = FALSE
-)
+table(srt$sample_id, srt$condition)
+table(srt$sample_id, srt$batch)
 ```
 
-The thresholds are study-specific. Treat them as an explicit decision, not a universal constant.
+Use `dataset` or `technology` for a technical source; use `sample_id` for the independent experimental unit. They are not interchangeable.
 
-## The SCOP construction order
+## Three checkpoints before advanced analysis
 
-For a package-level workflow, keep the order visible and test each seam:
+1. **Object checkpoint:** counts, features, barcodes, assays, layers, metadata, and sample identities are intact.
+2. **Biology checkpoint:** markers and expected cell populations are coherent; integration has not erased the variable of interest.
+3. **Inference checkpoint:** the independent unit matches the statistical model. For multi-sample studies, pseudobulk is the primary differential-expression path; per-cell testing is exploratory.
 
-`db_scDblFinder()` → `JoinLayers()` → `clustertree()` → `SCTransform()` + `Harmony_integrate()` or `Harmony()` → `RunDimsEstimate()` → downstream analysis.
+## Runtime used for the published evidence
 
-The exact functions and arguments must be checked against the target SCOP version and the upstream reference before reuse.
-
-## Before moving on
-
-- Can you state what one cell or spot represents?
-- Can you identify the assay and layer used by each step?
-- Can you explain which cells were filtered and why?
-- Can you distinguish a descriptive plot from a biological claim?
-
-[Continue to Concepts →](concepts.qmd)
+The current evidence was produced with **R 4.5.1**, **SCOP 0.8.9**, and **Seurat 5.5.0**, using seed `20260807`. See the [reproducibility record](reproducibility.qmd) before comparing exact numbers.

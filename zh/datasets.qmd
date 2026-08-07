@@ -1,0 +1,46 @@
+---
+title: "真实数据集图谱"
+description: "SCOP Learn 使用的真实数据集、来源、assay、规模和教学用途。"
+---
+
+主教程使用 SCOP 自带的五个真实数据集，再加一个公开 10x H5；合成数据不再作为主要教学证据。
+
+| 数据集 | 物种 | 大小 | assay / 模态 | 教学用途 |
+|---|---|---:|---|---|
+| `pancreas_sub` | 小鼠 | 15,998 × 1,000 | RNA、spliced、unspliced | 单样本质控、聚类、可扩展轨迹分析 |
+| `panc8_sub` | 人 | 12,940 × 1,600 | RNA；8 个数据来源 | 跨来源整合与 pseudobulk 示例 |
+| `pbmcmultiome_sub` | 人 | 21,074 × 500 | RNA + peaks | marker、标签转移、CellTypist、多组学选择 |
+| `visium_human_pancreas_sub` | 人 | 5,000 × 1,986 | Spatial；一张组织图像 | PanIN spot 质控、Moran 特征、空间网络与邻域 |
+| `visium_mouse_brain_slices_sub` | 小鼠 | 4,000 × 2,000 | Spatial；两个切片 | 多切片审计与整合决策 |
+| 10x PBMC 1k v3 H5 | 人 | 33,538 × 1,222 | 过滤后的表达矩阵 | 原始文件读取与往返验证 |
+
+## 加载并审计自带数据
+
+```r
+library(scop)
+library(Seurat)
+
+data(pancreas_sub, package = "scop")
+dim(pancreas_sub)
+Assays(pancreas_sub)
+colnames(pancreas_sub[[]])
+table(pancreas_sub$CellType)
+```
+
+每个对象都应先做同样的审计。元数据里实际存在的字段决定了能回答什么问题。例如 `panc8_sub$dataset` 是技术数据来源，不是患者编号。
+
+## 来源和适用边界
+
+- `pancreas_sub` 来自通过 scVelo 分发的小鼠胰腺内分泌发生数据。
+- `panc8_sub` 汇总了 SeuratData 分发的八个人胰岛数据来源。
+- `pbmcmultiome_sub` 是 SeuratData 分发的真实 PBMC 配对 RNA/ATAC 子集。
+- `visium_human_pancreas_sub` 来自 GSE254829 的 PanIN 样本 GSM8058244。
+- `visium_mouse_brain_slices_sub` 来自 10x Genomics 的两个矢状位前部小鼠脑切片。
+
+这些是教程和回归测试数据。成功重跑能验证流程，不能把它们变成新的独立队列。
+
+## 许可与再分发核对
+
+安装包帮助页把 `visium_mouse_brain_slices_sub` 标记为来自 10x/SeuratData、采用 CC BY 4.0。其他子集的帮助页给出了科学来源，但没有写明数据许可证，因此本站只记录来源，不声称未经核实的再分发权；重新分发源矩阵前必须核对原研究/数据库条款。公开 10x H5 由指定样本网址下载，不提交到本站仓库。
+
+机器可读的依据见[数据集清单](../evidence/real-data/dataset-catalog.csv)和[运行时清单](../evidence/real-data/runtime.json)。
