@@ -154,6 +154,15 @@ Audited version **没有** `RunVelocity()`。Ordering/arrow field 不是 lineage
 
 两者都不建立 clinical malignancy 或 causality，需要 orthogonal validation。
 
+### Perturbation 与 virtual knockout
+
+| 任务 | Runner | Plotter | 边界 |
+|---|---|---|---|
+| 响应 cell-type priority | `RunAugur()` | stored Augur result / appropriate SCOP display | classifier separability，不是 effect size |
+| in-silico gene knockout | `RunscTenifoldKnk()` | `scTenifoldKnkPlot()` | network prediction，不是实验 knockout |
+
+真实 perturbation study 仍需 guide assignment、perturbation efficiency、off-target review、independent samples 与正确 sample-level model。
+
 ## 10 · Spatial transcriptomics
 
 | 任务 | Runner | Plotter | 输入 |

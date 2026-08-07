@@ -58,5 +58,10 @@
     "executed": false,
     "reason": "SingleR and celldex are not installed in the audited runtime."
   },
+  "checkpoint": {
+    "path": "artifacts/real-data/checkpoints/annotation-pbmc.rds",
+    "sha256": "27e25f0ddad53cceb61caccd3fcf2bf7cd337a0bfbd2faf50a0f62abbbdf7dfc",
+    "bytes": 19999132
+  },
   "rule": "Automated labels are hypotheses; marker coherence, cluster context, dataset biology and uncertainty must be reviewed together."
 }

@@ -52,8 +52,13 @@
   },
   "checkpoint": {
     "path": "artifacts/real-data/checkpoints/spatial-human-pancreas.rds",
-    "sha256": "3bc05837a9d7b313a8e2829d8ec4630901f269629981c6703c954c400a6e94ed",
-    "bytes": 15906072
+    "sha256": "6a5f94de18ccfa44909b5b52969c9789185565c73067858d0af9536632f7a77a",
+    "bytes": 15906071
+  },
+  "mouse_brain_checkpoint": {
+    "path": "artifacts/real-data/checkpoints/spatial-mouse-brain-slices.rds",
+    "sha256": "b59a13c35dc4ae9bc97e91177995d313fb6836d6e9aecf2dd87f15b55feaf07c",
+    "bytes": 12415481
   },
   "deconvolution": {
     "executed": false,

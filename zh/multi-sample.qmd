@@ -19,6 +19,10 @@ description: "详细讲解样本表、逐样本 QC、merge 与 integration 选�
 7. 回到 raw counts 进行 sample-level pseudobulk 推断。
 :::
 
+## 生物学问题
+
+哪些变异更可能来自技术来源，哪些属于生物学差异，整合能否降低前者同时保留后者？只有先锁定 sample identity、独立实验单位、condition、batch、technology 与 dataset source，才可以回答这个问题。
+
 ## 1 · 先判断你拥有什么设计
 
 | 设计 | 独立单位 | 常见目标 | 整合可以做什么 | 整合不能做什么 |
@@ -129,7 +133,21 @@ objects <- lapply(objects, function(x) {
 
 上面的数值是占位符，必须根据逐样本分布修改。Study-level retention table 应包含输入细胞、各排除原因、唯一排除数、保留数、保留比例、gene/UMI/mito 中位数和样本 QC 状态。
 
-`RunCellQC()` 返回列会随指标和 SCOP 版本改变，应检查 metadata 而不是盲目复制列名。一个样本丢失 80% 细胞是研究层面的警报，不能被 pooled distribution 隐藏。
+SCOP 0.8.9 在上述 metrics 下返回 `db_qc` 与 `CellQC` 两个 `Pass`/`Fail` factors。建立 retention table：
+
+```r
+retention <- do.call(rbind, lapply(names(objects), function(id) {
+  md <- objects[[id]][[]]
+  data.frame(
+    sample_id = id,
+    input_cells = nrow(md),
+    doublets = sum(md$db_qc == "Fail", na.rm = TRUE),
+    qc_pass = sum(md$CellQC == "Pass", na.rm = TRUE)
+  )
+}))
+```
+
+版本变化后应检查 `table(md$db_qc, md$CellQC, useNA = "ifany")`。一个样本丢失 80% 细胞是研究层面的警报，不能被 pooled distribution 隐藏。
 
 ::: {.checkpoint}
 **检查点 1——逐样本 QC**

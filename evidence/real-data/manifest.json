@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-08-08 05:57:14 CST",
+  "generated_at": "2026-08-08 06:17:11 CST",
   "seed": 20260807,
   "components": {
     "runtime": {
       "path": "evidence/real-data/runtime.json",
-      "sha256": "d9e8592614623e08fa6279379ad498ec6bb0a3c9019db04e37fa86fbb177d9b3"
+      "sha256": "79ff9d2e4f42dc32c61790ee9420cf08959e0c1e5549080a5de70a8826b87b58"
     },
     "input-formats": {
       "path": "evidence/real-data/input-formats.json",
@@ -13,15 +13,15 @@
     },
     "single-sample": {
       "path": "evidence/real-data/single-sample.json",
-      "sha256": "517100c00851ebd23ba5068292a5c3b43df3237850f67737d32c3ee8a01d5fd7"
+      "sha256": "72196a7c7f48927e409dce7295883f3c62436c3b7297894f9c31ed8a8845e966"
     },
     "cross-source": {
       "path": "evidence/real-data/cross-source.json",
-      "sha256": "41d2e99c9f6cb095c72e8d5d3aee70b6b1ded1f3db0d971c189b12ce737f3c4f"
+      "sha256": "4f22c8708438d1837aaa6dc42ac72d8ead8baf34f924a6433be2eab402cf8b92"
     },
     "annotation": {
       "path": "evidence/real-data/annotation.json",
-      "sha256": "828246809a828f20fb1568779185dd63deed3cc018f6dac78761ce240cbdccd1"
+      "sha256": "a8e9ff182ad100cb26479c22e4eea8a0d833724bd077a0cbcc9cf829e39d8f0a"
     },
     "advanced": {
       "path": "evidence/real-data/advanced.json",
@@ -29,7 +29,7 @@
     },
     "spatial": {
       "path": "evidence/real-data/spatial.json",
-      "sha256": "8fccb3fe3cbe3efcd5113910d5336fa0cb7de91ef505e65a1a268a468bcc29d1"
+      "sha256": "c64d059e8e96e5906c167cd389db4249ed104d63f4450c01b1fafc2448263e70"
     }
   },
   "figures": {
@@ -39,7 +39,12 @@
       "bytes": 182922,
       "plot_function": "scop::VolcanoPlot",
       "dataset": "panc8_sub",
-      "source_checkpoint": "edgeR dataset-by-celltype pseudobulk table"
+      "source_checkpoint": {
+        "path": "evidence/real-data/pseudobulk-alpha-vs-beta.csv",
+        "sha256": "22284106fa87d3be97627ff9ae13e5df70bbb69fb77291d6c0485a9c5f766bdc",
+        "bytes": 512641,
+        "rebuild_script": "scripts/build-real-evidence.R"
+      }
     },
     "annotation-marker-evidence.png": {
       "path": "assets/figures/real-data/annotation-marker-evidence.png",
@@ -47,15 +52,25 @@
       "bytes": 58355,
       "plot_function": "scop::GroupHeatmap",
       "dataset": "pbmcmultiome_sub",
-      "source_checkpoint": "runtime-loaded normalized object"
+      "source_checkpoint": {
+        "path": "artifacts/real-data/checkpoints/annotation-pbmc.rds",
+        "sha256": "27e25f0ddad53cceb61caccd3fcf2bf7cd337a0bfbd2faf50a0f62abbbdf7dfc",
+        "bytes": 19999132,
+        "rebuild_script": "scripts/build-real-evidence.R"
+      }
     },
     "cross-source-integration.png": {
       "path": "assets/figures/real-data/cross-source-integration.png",
-      "sha256": "f876d409dabc3d696d4570d930d5d812e3b0fc0ae2272ba088777d4efe219134",
-      "bytes": 272288,
+      "sha256": "88f7e5a14626f98636641e5d37de87fd1ef574064c8c592c2876ef203a77ad04",
+      "bytes": 271396,
       "plot_function": "scop::CellDimPlot",
       "dataset": "panc8_sub",
-      "source_checkpoint": "artifacts/real-data/checkpoints/cross-source-panc8.rds"
+      "source_checkpoint": {
+        "path": "artifacts/real-data/checkpoints/cross-source-panc8.rds",
+        "sha256": "83b7a19305a7d0bdf63d06658f75bd9a018184a174b99996e8805b5612b7675f",
+        "bytes": 163041016,
+        "rebuild_script": "scripts/build-real-evidence.R"
+      }
     },
     "single-cluster-tree.png": {
       "path": "assets/figures/real-data/single-cluster-tree.png",
@@ -63,7 +78,12 @@
       "bytes": 87291,
       "plot_function": "scop::ClusterTreePlot",
       "dataset": "pancreas_sub",
-      "source_checkpoint": "artifacts/real-data/checkpoints/single-pancreas.rds"
+      "source_checkpoint": {
+        "path": "artifacts/real-data/checkpoints/single-pancreas.rds",
+        "sha256": "c60716d74cd9657bd7b032a058ac5a80cfd0c27f51e94617b385a4b4b444e4ad",
+        "bytes": 31676211,
+        "rebuild_script": "scripts/build-real-evidence.R"
+      }
     },
     "single-dims-estimate.png": {
       "path": "assets/figures/real-data/single-dims-estimate.png",
@@ -71,7 +91,12 @@
       "bytes": 78680,
       "plot_function": "scop::DimsEstimatePlot",
       "dataset": "pancreas_sub",
-      "source_checkpoint": "artifacts/real-data/checkpoints/single-pancreas.rds"
+      "source_checkpoint": {
+        "path": "artifacts/real-data/checkpoints/single-pancreas.rds",
+        "sha256": "c60716d74cd9657bd7b032a058ac5a80cfd0c27f51e94617b385a4b4b444e4ad",
+        "bytes": 31676211,
+        "rebuild_script": "scripts/build-real-evidence.R"
+      }
     },
     "single-qc.png": {
       "path": "assets/figures/real-data/single-qc.png",
@@ -79,15 +104,25 @@
       "bytes": 148009,
       "plot_function": "scop::FeatureStatPlot",
       "dataset": "pancreas_sub",
-      "source_checkpoint": "artifacts/real-data/checkpoints/single-pancreas.rds"
+      "source_checkpoint": {
+        "path": "artifacts/real-data/checkpoints/single-pancreas.rds",
+        "sha256": "c60716d74cd9657bd7b032a058ac5a80cfd0c27f51e94617b385a4b4b444e4ad",
+        "bytes": 31676211,
+        "rebuild_script": "scripts/build-real-evidence.R"
+      }
     },
     "single-umap.png": {
       "path": "assets/figures/real-data/single-umap.png",
-      "sha256": "0030caaa122ea1872c10712df6731e5b85629df95f861b40286bc9b6c2c4d511",
-      "bytes": 108111,
+      "sha256": "549a8928d38e12cdba94e201a3453b81e4e95f7de739f8ff654d0e5024ebafec",
+      "bytes": 108184,
       "plot_function": "scop::CellDimPlot",
       "dataset": "pancreas_sub",
-      "source_checkpoint": "artifacts/real-data/checkpoints/single-pancreas.rds"
+      "source_checkpoint": {
+        "path": "artifacts/real-data/checkpoints/single-pancreas.rds",
+        "sha256": "c60716d74cd9657bd7b032a058ac5a80cfd0c27f51e94617b385a4b4b444e4ad",
+        "bytes": 31676211,
+        "rebuild_script": "scripts/build-real-evidence.R"
+      }
     },
     "spatial-human-pancreas.png": {
       "path": "assets/figures/real-data/spatial-human-pancreas.png",
@@ -95,7 +130,12 @@
       "bytes": 914938,
       "plot_function": "scop::SpatialSpotPlot + scop::SpatialVariableFeaturePlot",
       "dataset": "visium_human_pancreas_sub",
-      "source_checkpoint": "artifacts/real-data/checkpoints/spatial-human-pancreas.rds"
+      "source_checkpoint": {
+        "path": "artifacts/real-data/checkpoints/spatial-human-pancreas.rds",
+        "sha256": "6a5f94de18ccfa44909b5b52969c9789185565c73067858d0af9536632f7a77a",
+        "bytes": 15906071,
+        "rebuild_script": "scripts/build-real-evidence.R"
+      }
     },
     "spatial-mouse-brain-slices.png": {
       "path": "assets/figures/real-data/spatial-mouse-brain-slices.png",
@@ -103,7 +143,12 @@
       "bytes": 262495,
       "plot_function": "scop::SpatialSpotPlot",
       "dataset": "visium_mouse_brain_slices_sub",
-      "source_checkpoint": "runtime-loaded two-image object"
+      "source_checkpoint": {
+        "path": "artifacts/real-data/checkpoints/spatial-mouse-brain-slices.rds",
+        "sha256": "b59a13c35dc4ae9bc97e91177995d313fb6836d6e9aecf2dd87f15b55feaf07c",
+        "bytes": 12415481,
+        "rebuild_script": "scripts/build-real-evidence.R"
+      }
     },
     "spatial-neighborhood.png": {
       "path": "assets/figures/real-data/spatial-neighborhood.png",
@@ -111,7 +156,12 @@
       "bytes": 70394,
       "plot_function": "scop::SpatialNeighborhoodPlot",
       "dataset": "visium_human_pancreas_sub",
-      "source_checkpoint": "artifacts/real-data/checkpoints/spatial-human-pancreas.rds"
+      "source_checkpoint": {
+        "path": "artifacts/real-data/checkpoints/spatial-human-pancreas.rds",
+        "sha256": "6a5f94de18ccfa44909b5b52969c9789185565c73067858d0af9536632f7a77a",
+        "bytes": 15906071,
+        "rebuild_script": "scripts/build-real-evidence.R"
+      }
     },
     "spatial-network.png": {
       "path": "assets/figures/real-data/spatial-network.png",
@@ -119,7 +169,12 @@
       "bytes": 823187,
       "plot_function": "scop::SpatialNetworkPlot",
       "dataset": "visium_human_pancreas_sub",
-      "source_checkpoint": "artifacts/real-data/checkpoints/spatial-human-pancreas.rds"
+      "source_checkpoint": {
+        "path": "artifacts/real-data/checkpoints/spatial-human-pancreas.rds",
+        "sha256": "6a5f94de18ccfa44909b5b52969c9789185565c73067858d0af9536632f7a77a",
+        "bytes": 15906071,
+        "rebuild_script": "scripts/build-real-evidence.R"
+      }
     }
   },
   "critical_assertions": {

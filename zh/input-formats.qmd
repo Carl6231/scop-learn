@@ -19,6 +19,10 @@ SCOP 从有效对象开始，不需要替代所有 format-native reader。安全
 7. 生成统一 object audit 与 checkpoint。
 :::
 
+## 生物学问题
+
+源文件能否转换为可审计的 sparse Seurat object，同时不丢失 raw counts、feature/cell IDs、sample design 与 modality？答案必须由转换后的结构审计和 checkpoint 证明，而不是“reader 没有报错”。
+
 ## 1 · 根据磁盘上的证据选择 reader
 
 | 文件 | Reader | 预期结果 | 必须停止的情况 |

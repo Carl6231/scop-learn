@@ -19,6 +19,10 @@ You will learn to:
 7. keep spot-level, composition-level, and cell-level conclusions separate.
 :::
 
+## Biological question
+
+Which spot-level expression programmes, spatial domains, graph edges, and labelled neighbourhoods are supported by the real sections, and when is cell-composition deconvolution justified? Every conclusion must declare whether it describes a measured spot, an estimated mixture, or a cell-resolved hypothesis.
+
 ## 1 · Load the object and audit spatial identity
 
 ::: {.input-contract}

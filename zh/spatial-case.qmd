@@ -19,6 +19,10 @@ description: "在真实人 PanIN 和小鼠脑 Visium 对象上，详细讲解坐
 7. 分开描述 spot、组成和细胞层面的结论。
 :::
 
+## 生物学问题
+
+真实切片支持哪些 spot-level expression programmes、spatial domains、graph edges 与 labelled neighbourhoods，何时才有理由进行 cell-composition deconvolution？每个结论都必须声明它描述的是实测 spot、估计 mixture，还是 cell-resolved hypothesis。
+
 ## 1 · 读取对象并审计空间身份
 
 ::: {.input-contract}

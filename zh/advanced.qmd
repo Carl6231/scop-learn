@@ -18,6 +18,10 @@ description: "详细且限制结论边界的 SCOP 教程：pseudobulk 差异表�
 6. 将模块连接成一条论文主线，而不是堆砌互不相关的图。
 :::
 
+## 生物学问题
+
+在现有独立实验单位、重复、object fields 与已安装 backend 下，预先规定的哪个生物学问题真正可识别？只有同时具备 input contract、完整结果表、sensitivity check、SCOP plot 与 stopping rule，才能保留一个高级模块。
+
 ## 1 · 先锁定问题与独立实验单位
 
 ::: {.input-contract}
@@ -44,6 +48,7 @@ description: "详细且限制结论边界的 SCOP 教程：pseudobulk 差异表�
 | 哪些代谢 programme 不同？ | 足够 gene coverage | relative pathway score | `RunMetabolism()` → `MetabolismPlot()` |
 | 哪些细胞有 CNV-like expression？ | tumour cells + 正常 reference | expression-derived CNV | `RunCNV()` → `CNVPlot()` |
 | 哪些单细胞与 bulk phenotype 相关？ | 匹配的 bulk cohort | Scissor+/Scissor− candidates | `RunScissor()` → `ScissorPlot()` |
+| 哪些群体响应更强，或 virtual knockout 预测什么？ | replicated perturbation labels 或有依据 network | response priority / in-silico hypothesis | `RunAugur()` 或 `RunscTenifoldKnk()` → `scTenifoldKnkPlot()` |
 
 ## 2 · 已执行的 pseudobulk 差异表达
 
@@ -395,7 +400,118 @@ ScissorPlot(
 
 拟合前必须对齐 bulk samples、phenotype values、feature IDs、方向与 covariates。与 bulk phenotype 的关联不证明所选 cells 导致 phenotype。
 
-## 9 · 建立一条论文主线
+## 9 · Perturbation response 与 virtual knockout
+
+`RunAugur()` 根据两个 perturbation/condition labels 的可分性排序 cell populations，但不能替代 sample-level effect estimation：
+
+```r
+srt <- RunAugur(
+  srt,
+  celltype.by = "annotation_final",
+  label.by = "perturbation",
+  assay = "RNA",
+  layer = "counts",
+  backend = "cpp",
+  n_subsamples = 50,
+  subsample_size = 20,
+  folds = 3,
+  classifier = "rf",
+  cores = 4
+)
+```
+
+Network-based **in-silico** knockout 可使用：
+
+```r
+srt <- RunscTenifoldKnk(
+  srt,
+  gKO = "STAT3",
+  assay = "RNA",
+  layer = "counts",
+  backend = "cpp",
+  cores = 4,
+  tool_name = "STAT3_virtual_KO"
+)
+
+scTenifoldKnkPlot(
+  srt,
+  tool_name = "STAT3_virtual_KO",
+  plot_type = "effect",
+  top_n = 20,
+  FDR_threshold = 0.05
+)
+```
+
+Augur score 是 predictive separability，不是 effect size/causality；virtual knockout 是 network-model prediction，不是 CRISPR experiment。真实 perturb-seq 必须有 biological replication、guide/perturbation QC，并在 causal statement 前做实验验证。
+
+## 10 · 在空间数据中验证单细胞结果
+
+只有当 single-cell 与 spatial 材料在 species、tissue、condition、anatomical context、feature IDs 和 coordinate quality 上兼容时，空间验证才成立。教学切片中的匹配 gene pattern 只能作为 localization 的正交支持，不能充当 patient-level replication，也不能证明一个 spot 只有一种细胞。
+
+::: {.input-contract}
+**空间验证输入合同**
+
+- 含 raw 或 normalized `Spatial` assay layers 的 spatial Seurat object；
+- 已声明 coordinate columns 和 image/section identity；
+- 预先规定的 single-cell signature 或 candidate gene，而不是对所有结果做事后搜索；
+- species 匹配且 feature identifiers 可解析；
+- tissue 与 condition 兼容，否则明确写为 exploratory comparison；
+- 若需要 deconvolution，必须有带已审核 labels 的 cell reference。
+:::
+
+先用 SCOP 检查预先规定的 candidate 是否具有空间结构：
+
+```r
+spatial_srt <- RunSpatialVariableFeatures(
+  spatial_srt,
+  assay = "Spatial",
+  layer = "data",
+  features = candidate_genes,
+  method = "moran",
+  image = "slice1",
+  coord.cols = c("x", "y"),
+  nperm = 999,
+  seed = 20260807,
+  coordinate_space = "raw"
+)
+
+SpatialVariableFeaturePlot(
+  spatial_srt,
+  plot_type = "surface",
+  features = candidate_genes,
+  assay = "Spatial",
+  layer = "data",
+  image = "slice1",
+  coord.cols = c("x", "y"),
+  flip.y = FALSE,
+  combine = TRUE
+)
+```
+
+若科学问题是 cell-type composition 而不是 spot expression，deconvolution 属于另一证据层级：
+
+```r
+spatial_srt <- RunRCTD(
+  spatial_srt,
+  reference = reference_srt,
+  reference_label = "annotation_final",
+  assay = "Spatial",
+  reference_assay = "RNA",
+  layer = "counts",
+  reference_layer = "counts",
+  image = "slice1",
+  coord.cols = c("x", "y"),
+  rctd_mode = "full",
+  max_cores = 4,
+  min_cells = 25,
+  coordinate_space = "raw",
+  tool_name = "RCTD"
+)
+```
+
+真实 human PanIN object 上已执行 `RunSpatialVariableFeatures()` 与对应 SCOP plotter，详见[空间章节](spatial-case.qmd)。`RunRCTD()` 已核对 SCOP 0.8.9 signature，但审计环境缺少 `spacexr`，因此没有执行；不能用 mock plot 替代。若 tissue/condition 不兼容、coordinate QC 失败、candidate 不存在、pattern 被 depth/edge artefact 驱动，或 optional backend 不可用，必须停止验证。
+
+## 11 · 建立一条论文主线
 
 常见且可辩护的链条是：
 
@@ -408,6 +524,7 @@ ScissorPlot(
 | enrichment → mechanism | coherent leading-edge genes | term 被 artefact/redundancy 驱动 |
 | mechanism → communication/regulation | 匹配状态和 prerequisites | 缺 backend/reference 或生物学矛盾 |
 | single-cell → spatial validation | 兼容组织/condition 和 coordinate QC | 数据集不可比较 |
+| perturbation prediction → causal claim | replicated perturbation 与 experimental validation | 只有 classifier/network prediction |
 
 ::: {.checkpoint}
 **检查点 2——高级分析包**

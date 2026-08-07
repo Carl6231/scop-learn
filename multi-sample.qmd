@@ -19,6 +19,10 @@ You will learn to:
 7. return to raw counts for sample-level pseudobulk inference.
 :::
 
+## Biological question
+
+Which variation is plausibly technical, which is biological, and can integration reduce the former while preserving the latter? This question is answerable only after sample identity, independent experimental units, condition, batch, technology, and dataset source have been locked.
+
 ## 1 · Identify the design you actually have
 
 | Design | Independent unit | Typical goal | What integration can do | What it cannot do |
@@ -138,13 +142,13 @@ retention <- do.call(rbind, lapply(names(objects), function(id) {
   data.frame(
     sample_id = id,
     input_cells = nrow(md),
-    doublets = sum(md$db_qc %in% FALSE, na.rm = TRUE),
-    qc_pass = sum(md$CellQC %in% TRUE, na.rm = TRUE)
+    doublets = sum(md$db_qc == "Fail", na.rm = TRUE),
+    qc_pass = sum(md$CellQC == "Pass", na.rm = TRUE)
   )
 }))
 ```
 
-Column names can differ by the selected `RunCellQC()` metrics and SCOP version; inspect the returned metadata rather than copying the last two lines blindly. A sample that loses 80% of cells is a study-level warning that must remain visible.
+In SCOP 0.8.9 with the requested metrics, `db_qc` and `CellQC` are factors with `Pass`/`Fail` levels. Inspect `table(md$db_qc, md$CellQC, useNA = "ifany")` after a version change. A sample that loses 80% of cells is a study-level warning that must remain visible.
 
 ::: {.checkpoint}
 **Checkpoint 1 — per-sample QC**

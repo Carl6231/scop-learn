@@ -47,7 +47,7 @@
     },
     "umap": {
       "path": "assets/figures/real-data/single-umap.png",
-      "sha256": "0030caaa122ea1872c10712df6731e5b85629df95f861b40286bc9b6c2c4d511",
+      "sha256": "549a8928d38e12cdba94e201a3453b81e4e95f7de739f8ff654d0e5024ebafec",
       "plot_function": "scop::CellDimPlot"
     },
     "cluster_tree": {
@@ -63,8 +63,8 @@
   },
   "checkpoint": {
     "path": "artifacts/real-data/checkpoints/single-pancreas.rds",
-    "sha256": "87992b4513e04c713167c1427035131b2fa048203f8be8681452cb1f023c3dc8",
-    "bytes": 31676182
+    "sha256": "c60716d74cd9657bd7b032a058ac5a80cfd0c27f51e94617b385a4b4b444e4ad",
+    "bytes": 31676211
   },
   "claim_boundary": "Cluster-majority accuracy is an internal concordance check against bundled labels, not independent biological validation."
 }

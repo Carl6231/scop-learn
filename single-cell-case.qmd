@@ -19,6 +19,10 @@ After this chapter you should be able to:
 7. save a restartable checkpoint and a minimal evidence bundle.
 :::
 
+## Biological question
+
+Can this real pancreas object yield a trustworthy, annotation-ready atlas after documented QC, layer joining, clustering, and dimension selection? The teaching subset can validate the workflow and recover known structure; it cannot establish a replicated developmental mechanism.
+
 ## 1 · Define the question and input contract
 
 The construction question is: *can this real object pass a transparent QC and clustering path that preserves the bundled developmental cell classes?* It is not: *can this teaching subset establish a new developmental discovery?*

@@ -19,6 +19,10 @@ You will learn to:
 7. create an auditable consensus table with unresolved labels.
 :::
 
+## Biological question
+
+Which cell identities are jointly supported by positive marker programmes, contradictory evidence, reference coverage, prediction confidence, and tissue context? A label remains unresolved when these evidence sources disagree or when the requested resolution is finer than the data support.
+
 ## 1 · Audit the query and decide annotation resolution
 
 ::: {.input-contract}
@@ -232,6 +236,7 @@ srt <- RunSingleR(
 SCOP exports `RunLabelTransfer()` for Seurat/scOMM transfer paths, particularly when a `ChromatinAssay` query needs RNA-derived labels or gene activity:
 
 ```r
+set.seed(20260807)
 atac_query <- RunLabelTransfer(
   srt = atac_query,
   reference = rna_reference,
@@ -243,8 +248,7 @@ atac_query <- RunLabelTransfer(
   reference_label = "cell_type",
   add_gene_activity = TRUE,
   evaluate = TRUE,
-  truth_col = "CellType",
-  seed = 20260807
+  truth_col = "CellType"
 )
 ```
 
