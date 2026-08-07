@@ -8,6 +8,8 @@ body {
 .skip-link { position: absolute; left: -10000px; top: 0; z-index: 2000; padding: 0.6rem 0.9rem; color: #07111f; background: #f59e0b; border-radius: 0 0 0.55rem 0.55rem; }
 .skip-link:focus { left: 1rem; }
 :focus-visible { outline: 3px solid #0e7490; outline-offset: 3px; }
+.btn-primary { color: #fff; background: #0b5971; border-color: #0b5971; }
+.btn-primary:hover, .btn-primary:focus { color: #fff; background: #073f52; border-color: #073f52; }
 
 .navbar-brand { font-weight: 760; letter-spacing: -0.02em; }
 .hero-learn { position: relative; overflow: hidden; margin: -1rem -0.75rem 2.5rem; padding: clamp(3.5rem, 9vw, 7.5rem) clamp(1.25rem, 7vw, 6rem); color: #f8fafc; background: radial-gradient(circle at 80% 20%, rgba(47, 111, 143, 0.5), transparent 32%), radial-gradient(circle at 15% 75%, rgba(217, 119, 69, 0.32), transparent 32%), #07111f; border-radius: 0 0 2rem 2rem; }
@@ -21,6 +23,7 @@ body {
 .version-chip { display: inline-flex; padding: 0.3rem 0.6rem; border-radius: 999px; color: #17445c; background: #dff1fa; font-size: 0.78rem; font-weight: 750; }
 .boundary { padding: 1rem 1.15rem; border-left: 4px solid #d97745; background: #fff4ec; }
 .figure-caption { color: #526276; font-size: 0.9rem; }
+figcaption { color: #394b61; }
 .proof-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); gap: 0.8rem; margin: 1.2rem 0 2rem; }
 .proof-item { padding: 1rem; border: 1px solid #cbd7e4; border-radius: 0.9rem; background: #fff; }
 .proof-item strong { display: block; color: #0e7490; font-size: 1.35rem; }
