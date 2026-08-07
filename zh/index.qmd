@@ -1,24 +1,30 @@
 ---
 pagetitle: "SCOP Learn：用真实数据完成单细胞与空间分析"
-description: "基于 SCOP 0.8.9 自带真实数据集和公开 10x H5 文件的可执行双语教程。"
+description: "基于 SCOP 0.8.9 真实自带数据、SCOP 原生结果图与论文级可复现流程的详细双语教程。"
 ---
 
 ::: {.hero-learn}
-<div class="eyebrow">真实数据 · 完整复现 · 明确结论边界</div>
+<div class="eyebrow">真实数据 · SCOP 原生图片 · 完整复现</div>
 
 # 从原始文件走到论文级 SCOP 分析
 
-系统学习 H5、10x 三件套、RDS、H5AD 和 Loom 的读取；单样本与多样本质控；跨数据来源整合；细胞注释；高级分析；空间转录组。主教程中的每张结果图都由真实数据实际运行得到，不再用合成数据代替生物学结果。
+详细学习 H5、10x 三件套、RDS、H5AD、Loom、multiome 和多样本输入；完成可审计 QC/integration；比较多种 annotation 选择；根据生物学问题选择高级分析；完成空间转录组流程。每张 published analysis PNG 都由 exported SCOP plotter 在命名真实数据上生成。
 
-[开始学习](start-here.qmd){.btn .btn-primary} [English](../index.qmd){.btn .btn-outline-light}
+[开始详细教程](start-here.qmd){.btn .btn-primary} [English](../index.qmd){.btn .btn-outline-light}
 :::
 
 <div class="proof-strip">
 <div class="proof-item"><strong>5 个</strong>SCOP 自带真实数据集</div>
-<div class="proof-item"><strong>1,222</strong>个公开 10x H5 细胞</div>
-<div class="proof-item"><strong>8 张</strong>已实际检查的真实结果图</div>
-<div class="proof-item"><strong>314 个</strong>SCOP 0.8.9 导出函数</div>
+<div class="proof-item"><strong>1,222</strong>个官方 10x H5 细胞</div>
+<div class="proof-item"><strong>11 张</strong>SCOP 原生真实结果图</div>
+<div class="proof-item"><strong>314 个</strong>SCOP 0.8.9 exports</div>
 </div>
+
+## 为什么这是可以执行的详细教程
+
+每个主要 workflow 页面都有：学习目标与 input contract；exact R calls/key parameters/object fields；backend/design 可用时的实际结果；注明 function/dataset/checkpoint 的 SCOP-native provenance；output/checkpoint 与 reproducibility evidence；failure modes/alternative routes/practice task；明确“该结果不能证明什么”。
+
+本站严格区分 **executed evidence**、**version-checked template** 与 **not-executed backend**。漂亮图片不能替代 biological replication 或有效 study design。
 
 ## 教程主线
 
@@ -27,41 +33,82 @@ description: "基于 SCOP 0.8.9 自带真实数据集和公开 10x H5 文件的�
 ::: {.lesson-card}
 ### 01 · 正确读取数据
 
-根据 H5、10x 三件套、RDS、H5AD 或 Loom 选择读取函数，并对公开 PBMC 1k H5 做真实往返验证。
+根据 H5、三件套、RDS、H5AD、Loom、text、multiome 或多样本选择 reader。官方 PBMC 1k H5 经三件套/RDS round-trip，并精确核对 dimensions/UMIs。
 
-[读取不同格式 →](input-formats.qmd)
+[详细输入教程 →](input-formats.qmd)
 :::
 :::
 ::: {.g-col-12 .g-col-md-4}
 ::: {.lesson-card}
 ### 02 · 构建可信对象
 
-先观察分布再定阈值，检测双细胞，处理 Seurat v5 layers，检查聚类稳定性，并由数据估计维度。
+审计 counts/metadata，先看分布再设 QC，按 library 调 doublets，处理 Seurat v5 layers，检查 cluster stability，估计 dimensions 并保存 checkpoint。
 
-[单样本流程 →](single-cell-case.qmd)
+[详细单样本案例 →](single-cell-case.qmd)
 :::
 :::
 ::: {.g-col-12 .g-col-md-4}
 ::: {.lesson-card}
 ### 03 · 扩展到完整研究
 
-保留样本身份，整合技术来源，验证生物学信号没有被抹掉，完成证据化注释，并用 pseudobulk 进行样本层面的推断。
+保留 patient/sample identity，区分 biological samples 与 technical sources，只在有依据时 integration，并同时验证 mixing 与 biology preservation。
 
 [多样本与跨来源 →](multi-sample.qmd)
 :::
 :::
+::: {.g-col-12 .g-col-md-4}
+::: {.lesson-card}
+### 04 · 用证据完成注释
+
+结合 marker programmes、contradictory evidence、cluster markers、reference transfer、CellTypist/SingleR、confidence、tissue context 与 unresolved labels。
+
+[细胞注释选择 →](annotation.qmd)
+:::
+:::
+::: {.g-col-12 .g-col-md-4}
+::: {.lesson-card}
+### 05 · 回答高级问题
+
+只有 experimental unit 与 backend contract 通过时才做 pseudobulk、enrichment、composition、trajectory、communication、SCENIC、metabolism、CNV 或 Scissor。
+
+[高级分析 →](advanced.qmd)
+:::
+:::
+::: {.g-col-12 .g-col-md-4}
+::: {.lesson-card}
+### 06 · 增加空间证据
+
+审计 image/coordinates，做 spot QC、spatial features、graphs、neighbourhood，并判断 deconvolution/integration 是否可支持。
+
+[空间转录组 →](spatial-case.qmd)
+:::
+:::
 :::
 
-## 本站真实运行得到了什么
+## 一个真实执行的整合结果
 
-![真实胰腺细胞在 SCT 与 Harmony 整合前后的结果。](../assets/figures/real-data/cross-source-integration.png){fig-alt="三幅 UMAP 依次展示 Harmony 前的数据来源分离、Harmony 后的数据来源混合，以及 Harmony 后保留的细胞类型结构。"}
+![真实胰腺细胞在 SCT 与 Harmony 整合前后的 SCOP CellDimPlot。](../assets/figures/real-data/cross-source-integration.png){fig-alt="三幅 SCOP UMAP 展示 Harmony 前的数据来源、Harmony 后的来源混合，以及 Harmony 后保留的 cell-type structure。"}
 
-在 `panc8_sub` 中，20 个近邻里来自其他技术来源的比例由 **0.2169 提高到 0.6765**，同一已知细胞类型的近邻比例由 **0.9379 提高到 0.9616**。这能证明该整合流程在此数据上有效，但不能把技术数据来源冒充为生物学重复。
+::: {.scop-native}
+**SCOP 原生图片证据：**三个 embedding panels 均由 `scop::CellDimPlot()` 从真实 `panc8_sub` cross-source checkpoint 生成，组合时没有替换 SCOP analysis layer。
+:::
 
-## 如何支撑一篇完整论文
+在 `panc8_sub` 中，20-nearest-neighbour 的 cross-source fraction 从 **0.2169 增至 0.6765**，same-known-cell-type preservation 从 **0.9379 增至 0.9616**。这支持该对象上的 SCT + Harmony path；八个 source labels 不是八个 biological replicates。
 
-[论文级分析框架](paper-framework.qmd)把输入、质控、整合、注释、差异、富集、组成、轨迹、通讯、调控、代谢、恶性识别与空间验证组织成围绕研究问题的连续证据链。任何未实际运行成功的可选后端都不会被写成“已经完成”。
+## 完整论文路径
+
+[论文框架](paper-framework.qmd)将 design、input、per-sample QC、atlas、annotation、composition、pseudobulk、enrichment、一个 mechanistic extension 和可选 spatial validation 映射到 figures、tables、checkpoints 与 allowed claims。
+
+[数据集地图](datasets.qmd)说明哪个真实对象支持哪个 lesson；[复现章节](reproducibility.qmd)提供 source hash、runtime、rebuild command、11-figure provenance manifest；[排错指南](troubleshooting.qmd)从最早破坏的 contract 开始。
+
+## 推荐第一条路线
+
+1. 从[这里开始](start-here.qmd)，命名 independent unit。
+2. Integration/condition test 前读[核心概念](concepts.qmd)。
+3. 先完整复现一个[bundled dataset](datasets.qmd)。
+4. 在 input checkpoint 用自己的数据替换 teaching object。
+5. Design、backend 或 validation contract 失败时停止。
 
 ::: {.boundary}
-**证据边界：** 本站证明的是特定数据、函数和运行时上的可复现流程，不代表每种方法都适合所有研究，也不把教程数据的重分析包装成新的生物学发现。
+**证据边界：** 本站证明 named real datasets 与 locked runtime 上的 executable workflows；不证明方法适合所有研究，不把 technical sources 变成 patients，也不把 teaching-data reanalysis 包装成新发现。
 :::

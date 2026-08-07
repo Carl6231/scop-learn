@@ -9,7 +9,7 @@
   "top_genes": ["NPTX2", "TM4SF4", "LOXL4", "GSN", "IRX2", "HADH", "TTR", "FXYD3", "TMEM176B", "SYT13", "ARX", "GLS", "SPTSSB", "TMEM176A", "FXYD5"],
   "figure": {
     "path": "assets/figures/real-data/advanced-pseudobulk.png",
-    "sha256": "bff34e47e623afe15b19e33906fb12a149cc23c13cea2fce3b97a1e8043cf906"
+    "sha256": "f5a9362bf535f056156f1bbbe8f0b7d7bd84de96d0c2acbe883bc91bc00b73cf"
   },
   "claim_boundary": "Dataset sources are technical replicates. This validates the code path and cell-type signal but cannot support population or disease inference."
 }

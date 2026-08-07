@@ -97,6 +97,8 @@ jobs:
           test -s assets/figures/real-data/single-umap.png
           test -s assets/figures/real-data/cross-source-integration.png
           test -s assets/figures/real-data/spatial-human-pancreas.png
+      - name: Verify detailed curriculum and SCOP-native figures
+        run: python3 scripts/verify-curriculum.py
       - name: Validate real-data evidence chain
         run: |
           python3 - <<'PY'
@@ -107,7 +109,7 @@ jobs:
           manifest = json.loads(Path("evidence/real-data/manifest.json").read_text())
           assert all(manifest["critical_assertions"].values()), manifest["critical_assertions"]
           assert len(manifest["components"]) == 7
-          assert len(manifest["figures"]) >= 8
+          assert len(manifest["figures"]) == 11
 
           def sha256(path):
               return hashlib.sha256(Path(path).read_bytes()).hexdigest()
@@ -118,6 +120,10 @@ jobs:
           for name, item in manifest["figures"].items():
               assert Path(item["path"]).is_file(), name
               assert sha256(item["path"]) == item["sha256"], name
+              assert item["plot_function"], name
+              assert item["dataset"], name
+              assert item["source_checkpoint"], name
+              assert all(plotter.startswith("scop::") for plotter in item["plot_function"].split(" + ")), name
 
           inputs = json.loads(Path("evidence/real-data/input-formats.json").read_text())
           assert inputs["features"] == 33538 and inputs["cells"] == 1222

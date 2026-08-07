@@ -1,28 +1,68 @@
 ---
 title: "Real spatial transcriptomics workflow"
-description: "A real human PanIN and mouse-brain Visium workflow covering spot QC, Moran features, spatial networks, neighbourhoods, and deconvolution boundaries."
+description: "A detailed SCOP spatial workflow on real human PanIN and mouse-brain Visium objects, including coordinates, spot QC, Moran features, networks, neighbourhoods, multi-slice decisions, and deconvolution boundaries."
 ---
 
-This chapter uses two real SCOP datasets: 1,986 human PanIN Visium spots from GSM8058244 and 2,000 spots across two mouse-brain slices.
+This chapter uses two real SCOP datasets: **1,986 human PanIN Visium spots** from GSM8058244 and **2,000 spots across two mouse-brain slices**. It teaches three distinct evidence levels: a spot measurement, a spot-composition estimate, and a cell-resolved inference. Do not collapse them into the same claim.
 
-## 1 · Load and audit coordinate space
+::: {.learning-objectives}
+## Learning outcomes
+
+You will learn to:
+
+1. audit assays, tissue images, spot barcodes, and coordinate spaces;
+2. run and interpret spot QC without copying universal thresholds;
+3. identify and plot spatially variable genes with SCOP;
+4. construct and inspect a native spatial graph;
+5. quantify labelled-domain neighbourhoods;
+6. decide whether RCTD, multi-slice integration, or spatial communication is supportable;
+7. keep spot-level, composition-level, and cell-level conclusions separate.
+:::
+
+## 1 · Load the object and audit spatial identity
+
+::: {.input-contract}
+**Input contract for the executed human case**
+
+- Seurat object: `visium_human_pancreas_sub`;
+- default assay: `Spatial`;
+- image: `slice1`;
+- metadata coordinates: `x`, `y`;
+- one sample identifier and bundled `coda_label`;
+- 5,000 features × 1,986 spots;
+- `coda_label` is a bundled annotation, not a domain result rediscovered here.
+:::
 
 ```r
 library(scop)
 library(Seurat)
 
+set.seed(20260807)
 data(visium_human_pancreas_sub, package = "scop")
 srt <- visium_human_pancreas_sub
 DefaultAssay(srt) <- "Spatial"
 
-dim(srt)
-Images(srt)
+list(
+  dimensions = dim(srt),
+  assays = Assays(srt),
+  layers = Layers(srt[["Spatial"]]),
+  images = Images(srt),
+  metadata = colnames(srt[[]])
+)
 head(srt[[]][, c("x", "y", "sample_id", "coda_label")])
 ```
 
-Confirm whether coordinates are raw array coordinates, image pixels, or a display transform. The published workflow uses `coord.cols = c("x", "y")` consistently.
+Confirm barcode agreement before drawing anything:
 
-## 2 · Spot QC
+```r
+stopifnot(!anyDuplicated(colnames(srt)))
+stopifnot(all(rownames(srt[[]]) == colnames(srt)))
+stopifnot(all(is.finite(srt$x)), all(is.finite(srt$y)))
+```
+
+Coordinates may represent Visium array positions, full-resolution pixels, low-resolution pixels, microns, or a display transform. The executed workflow declares `coord.cols = c("x", "y")` and uses that same space consistently.
+
+## 2 · Calculate spot QC
 
 ```r
 srt <- RunSpotQC(
@@ -32,37 +72,87 @@ srt <- RunSpotQC(
   qc_metrics = c("umi", "gene", "mito"),
   UMI_threshold = 0,
   gene_threshold = 0,
-  mito_threshold = 100
+  mito_threshold = 100,
+  seed = 20260807,
+  verbose = FALSE
 )
 ```
 
-Those permissive values compute and retain metrics for the bundled teaching subset; they are not recommended thresholds for raw tissue. For a new slide, inspect spot distributions, tissue mask, empty/background spots, spatial edge effects, and per-slice retention before filtering.
+The permissive thresholds retain the complete bundled teaching subset while populating QC fields. They are not recommended cutoffs for raw tissue. For a new slide, inspect:
 
-## 3 · Normalise and find spatially variable genes
+- UMI and detected-gene distributions per slide;
+- mitochondrial or stress-rich edge regions;
+- tissue mask versus empty/background positions;
+- abrupt spatial dropout, folds, tears, and staining artefacts;
+- retained spots by slide and tissue compartment;
+- whether low-count regions are technical failure or real morphology.
+
+Use `FeatureStatPlot()` for numeric QC distributions and `SpatialSpotPlot(values = ...)` or feature arguments to see where a metric is located. A slide-wide violin can hide a spatially concentrated failure.
+
+::: {.checkpoint}
+**Checkpoint 1 — coordinate and QC contract**
+
+Save the untouched object, selected coordinate columns, image names, per-slide QC summary, exclusion table, and a spatial view of each QC metric before filtering.
+:::
+
+## 3 · Normalize and identify spatially variable features
 
 ```r
-srt <- NormalizeData(srt, assay = "Spatial")
+srt <- NormalizeData(srt, assay = "Spatial", verbose = FALSE)
+
 srt <- RunSpatialVariableFeatures(
   srt,
   assay = "Spatial",
+  layer = "data",
   method = "moran",
+  image = "slice1",
   coord.cols = c("x", "y"),
+  k = 6,
   nfeatures = 100,
   min_spots = 10,
-  seed = 20260807
+  store_results = TRUE,
+  seed = 20260807,
+  verbose = FALSE
 )
-head(VariableFeatures(srt), 20)
+
+top_moran <- head(VariableFeatures(srt), 20)
+top_moran
 ```
 
-The top real Moran features include `FBP1`, `CELA3A`, `PNLIP`, `SPP1`, `CLPS`, `CTRC`, `PRSS1`, and `COL1A1`.
+The real top features include `FBP1`, `CELA3A`, `PNLIP`, `SPP1`, `CLPS`, `CTRC`, `PRSS1`, and `COL1A1`. Moran ranking asks whether expression is spatially structured; it does not identify a causal programme or a cell type.
 
-![Human PanIN spatial domains and the top Moran feature FBP1.](assets/figures/real-data/spatial-human-pancreas.png){fig-alt="Two tissue-coordinate panels show CoDa domain labels and FBP1 log expression across 1,986 real Visium spots."}
+Draw the bundled domains and the top feature with SCOP:
 
-Most spots are labelled collagen in this subset, while islet, acinar, smooth-muscle, fat, epithelial, and rare PanIN-labelled spots occupy smaller regions. The plot is spot-level evidence.
+```r
+SpatialSpotPlot(
+  srt,
+  group.by = "coda_label",
+  image = "slice1",
+  overlay_image = FALSE,
+  coord.cols = c("x", "y")
+)
 
-The displayed `coda_label` domains are bundled labels, not domains rediscovered by this script. For a new object, run and compare an exported spatial-domain method appropriate to the installed backend, then validate domain markers and tissue morphology before naming regions.
+SpatialVariableFeaturePlot(
+  srt,
+  plot_type = "surface",
+  features = top_moran[1],
+  assay = "Spatial",
+  layer = "data",
+  image = "slice1",
+  overlay_image = FALSE,
+  coord.cols = c("x", "y")
+)
+```
 
-## 4 · Build the spatial graph and neighbourhood summary
+![SCOP native spatial-domain and Moran-feature plots on the real human PanIN object.](assets/figures/real-data/spatial-human-pancreas.png){fig-alt="SCOP SpatialSpotPlot shows bundled human PanIN spot domains and SCOP SpatialVariableFeaturePlot shows FBP1 expression over 1,986 real Visium spots."}
+
+::: {.scop-native}
+**SCOP-native figure provenance:** the left panel is `scop::SpatialSpotPlot()` and the right panel is `scop::SpatialVariableFeaturePlot()`. Both use the same real object and declared coordinate space. No raw ggplot spatial redraw is used.
+:::
+
+Most spots carry the bundled collagen label; islet, acinar, smooth-muscle, fat, epithelial, and rare PanIN-labelled spots occupy smaller regions. Because the labels were already bundled, the defensible statement is that SCOP renders their spatial arrangement—not that this workflow discovered those domains.
+
+## 4 · Construct the native spatial network
 
 ```r
 srt <- RunSpatialNetwork(
@@ -71,9 +161,31 @@ srt <- RunSpatialNetwork(
   image = "slice1",
   coord.cols = c("x", "y"),
   k = 6,
-  graph.name = "scop_knn"
+  graph.name = "scop_knn",
+  overwrite = TRUE,
+  verbose = FALSE
 )
 
+SpatialNetworkPlot(
+  object = srt,
+  graph.name = "scop_knn",
+  group.by = "coda_label",
+  edge.linewidth = 0.15,
+  pt.size = 1.2
+)
+```
+
+![SCOP SpatialNetworkPlot of the real PanIN KNN graph.](assets/figures/real-data/spatial-network.png){fig-alt="SCOP spatial network plot overlays a six-nearest-neighbour graph and bundled domain labels on the human PanIN tissue image."}
+
+::: {.scop-native}
+**SCOP-native figure provenance:** generated by `scop::SpatialNetworkPlot()` from the graph stored by `RunSpatialNetwork()`. The edges encode the selected geometric neighbourhood; they are not inferred cell communication.
+:::
+
+Choose `k` or radius from spot spacing and technology. A larger graph is not automatically better: too many edges can connect across holes or tissue boundaries.
+
+## 5 · Quantify domain neighbourhoods
+
+```r
 srt <- RunSpatialNeighborhood(
   srt,
   group.by = "coda_label",
@@ -81,42 +193,162 @@ srt <- RunSpatialNeighborhood(
   image = "slice1",
   coord.cols = c("x", "y"),
   k = 6,
-  tool_name = "coda_neighborhood"
+  tool_name = "SpatialNeighborhood",
+  store_results = TRUE,
+  verbose = FALSE
+)
+
+SpatialNeighborhoodPlot(
+  srt,
+  method = "observed",
+  plot_type = "heatmap",
+  top_n = 30
 )
 ```
 
-Application: describe which labelled spot domains lie next to one another. With multiple patients, carry `sample.by`/`subject.by` through and model associations across independent tissues.
+![SCOP SpatialNeighborhoodPlot of observed spot-domain contacts.](assets/figures/real-data/spatial-neighborhood.png){fig-alt="SCOP heatmap summarizes observed contacts among acini, collagen, fat, islet, normal epithelium, PanIN, and smooth-muscle spot labels."}
 
-## 5 · Deconvolution choices
+::: {.scop-native}
+**SCOP-native figure provenance:** generated by `scop::SpatialNeighborhoodPlot()` from the stored `RunSpatialNeighborhood(method = "observed")` result.
+:::
 
-If a matched single-cell reference exists, SCOP exposes `RunRCTD()`:
+On one tissue, this is descriptive. For a condition comparison, use independent tissues, preserve subject identity, and supply `sample.by`, `split.by`, or `subject.by` as required by the selected method. Thousands of neighbouring spots on one slide are not thousands of patients.
+
+## 6 · Deconvolution decision
+
+RCTD is appropriate when a compatible single-cell reference exists and the `spacexr` backend is available:
 
 ```r
 rctd <- RunRCTD(
   srt = srt,
   reference = reference,
   reference_label = "cell_type",
+  assay = "Spatial",
+  reference_assay = "RNA",
+  layer = "counts",
+  reference_layer = "counts",
+  image = "slice1",
   coord.cols = c("x", "y"),
-  rctd_mode = "full"
+  rctd_mode = "full",
+  max_cores = 4,
+  store_results = TRUE
 )
+
+SpatialDeconvolutionPlot(rctd)
 ```
 
-The audited runtime lacks `spacexr`, so no RCTD result is shown. Deconvolution requires compatible species, gene identifiers, reference cell types, and a functioning backend. A domain label is not a substitute for cell-composition estimation.
+The audited runtime lacks `spacexr`; therefore no RCTD result or deconvolution picture is published. Before running, verify species, identifier namespace, shared genes, reference cell counts, raw counts, cell-type granularity, and coordinate units. A bundled domain label is not a substitute for estimated cell composition.
 
-## 6 · Multiple slides
+## 7 · Audit multiple slices before integration
 
 ```r
 data(visium_mouse_brain_slices_sub, package = "scop")
-table(visium_mouse_brain_slices_sub$slice)
-Images(visium_mouse_brain_slices_sub)
+brain <- visium_mouse_brain_slices_sub
+
+table(brain$slice)
+Images(brain)
+table(brain$region, brain$slice)
 ```
 
-![Two real mouse-brain Visium slices before integration.](assets/figures/real-data/spatial-mouse-brain-slices.png){fig-alt="Two panels show 1,000 sampled spots from each of two sagittal anterior mouse-brain Visium slices."}
+The object contains `anterior1` and `anterior2`, each with 1,000 spots. Plot images explicitly; multiple-image objects should never rely on an implicit image choice:
 
-Do QC and spatial-feature discovery per slide, preserve `sample_id` and coordinate systems, and only then consider `RunSpatialIntegration()`. Integration across slides must not erase a biological region or condition that is confounded with slide.
+```r
+p1 <- SpatialSpotPlot(
+  brain,
+  group.by = "region",
+  image = "anterior1",
+  cells = Cells(brain[["anterior1"]]),
+  overlay_image = FALSE
+)
 
-The published two-slice figure is an executed pre-integration audit; multi-slice integration is not claimed because the bundled subset contains only the broad `anterior` region label, which cannot provide a meaningful biology-preservation test. Spatial communication likewise requires resolved sender/receiver composition, multiple independent tissues for group comparison, and a working `RunSpatialCellChat()` backend; spot-level co-expression alone is not called cell-cell signalling.
+p2 <- SpatialSpotPlot(
+  brain,
+  group.by = "region",
+  image = "anterior2",
+  cells = Cells(brain[["anterior2"]]),
+  overlay_image = FALSE
+)
+```
+
+![SCOP SpatialSpotPlot of two real mouse-brain Visium slices before integration.](assets/figures/real-data/spatial-mouse-brain-slices.png){fig-alt="Two SCOP panels each show 1,000 spots from one real sagittal anterior mouse-brain Visium slice."}
+
+::: {.scop-native}
+**SCOP-native figure provenance:** both panels are generated by `scop::SpatialSpotPlot()` with explicit image and cell selections.
+:::
+
+Possible integration call:
+
+```r
+brain_integrated <- RunSpatialIntegration(
+  brain,
+  method = "PRECAST",
+  sample.by = "slice",
+  assay = "Spatial",
+  layer = "counts",
+  coord.cols = c("x", "y")
+)
+
+SpatialIntegrationPlot(brain_integrated)
+```
+
+That code is not claimed as executed here. The bundled subset only has the coarse region label `anterior`, so there is no meaningful fine-region label with which to verify biology preservation. An integration plot without a preservation test would be insufficient evidence.
+
+## 8 · Spatial communication decision
+
+`RunSpatialCellChat()` can operate at cell, spot, or composition level, but the interpretation changes:
+
+```r
+spatial_chat <- RunSpatialCellChat(
+  srt,
+  group.by = "coda_label",
+  sample.by = "sample_id",
+  assay = "Spatial",
+  layer = "data",
+  image = "slice1",
+  coord.cols = c("x", "y"),
+  species = "Homo_sapiens",
+  technology = "visium",
+  analysis.level = "spot",
+  nboot = 100,
+  seed.use = 20260807
+)
+```
+
+At spot level, the result is spatially constrained ligand–receptor co-expression between mixed spots. It is not direct proof that one resolved cell type signals to another. Cell-type communication requires deconvolution or a cell-resolved technology, an explicit composition model, multiple independent tissues for group comparison, and a functioning backend.
+
+## 9 · Output and checkpoint contract
+
+Save at least:
+
+```r
+saveRDS(srt, "checkpoints/05_spatial_pancreas.rds")
+write.csv(
+  GetSpatialResult(srt, method = "SpatialVariableFeatures"),
+  "results/spatial-variable-features.csv",
+  row.names = FALSE
+)
+writeLines(capture.output(sessionInfo()), "results/spatial-session-info.txt")
+```
+
+Also save the image names, coordinate-space declaration, spot-retention table, graph parameters, neighbourhood result, top-feature table, optional-backend states, figures, and hashes.
+
+## Failure modes and stop rules
+
+| Symptom | Evidence to inspect | Response |
+|---|---|---|
+| tissue is mirrored | image coordinates, `flip.y`, coordinate source | choose one declared space and regenerate all panels |
+| graph bridges empty holes | edge overlay, spot spacing, `k` | reduce `k` or use radius neighbours |
+| Moran genes are only high-count housekeeping genes | library size and expression prevalence | verify normalization and add sensitivity checks |
+| RCTD returns implausible mixtures | shared genes, reference labels, species, counts | stop; repair the reference instead of interpreting the plot |
+| slices mix but known regions disappear | pre/post markers and region structure | reject the integration or narrow its use |
+| one slide drives a condition result | sample-level summaries | do not claim condition inference without independent tissues |
+
+::: {.exercise}
+## Practice task
+
+Rebuild the spatial graph with `k = 4` and `k = 10`. Compare edge count, disconnected components, and the top five neighbourhood pairs. Decide which graph better respects tissue geometry before looking at any biological interpretation.
+:::
 
 ::: {.boundary}
-Visium spots are mixtures. Moran features and neighbourhoods support spatial-pattern claims; they do not prove cell-resolved identity, interaction, or causality.
+**Claim boundary:** Moran features, graphs, and neighbourhoods support spot-level spatial-pattern claims. They do not by themselves establish cell-resolved identity, physical signalling, temporal order, or causality.
 :::

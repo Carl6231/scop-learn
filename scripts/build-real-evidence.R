@@ -6,6 +6,7 @@ suppressPackageStartupMessages({
   library(scop)
   library(ggplot2)
   library(Matrix)
+  library(patchwork)
 })
 
 seed <- 20260807L
@@ -22,9 +23,16 @@ fig_path <- function(name) file.path("assets/figures/real-data", paste0(name, ".
 checkpoint_path <- function(name) file.path("artifacts/real-data/checkpoints", paste0(name, ".rds"))
 sha256 <- function(path) digest::digest(path, algo = "sha256", file = TRUE)
 write_json <- function(x, name) jsonlite::write_json(x, json_path(name), auto_unbox = TRUE, pretty = TRUE, null = "null")
-save_plot <- function(plot, name, width = 9, height = 6) {
+figure_registry <- list()
+save_plot <- function(plot, name, plot_function, dataset, source_checkpoint, width = 9, height = 6) {
   path <- fig_path(name)
   ggsave(path, plot, width = width, height = height, dpi = 180, bg = "white")
+  figure_registry[[basename(path)]] <<- list(
+    path = path,
+    plot_function = plot_function,
+    dataset = dataset,
+    source_checkpoint = source_checkpoint
+  )
   path
 }
 save_checkpoint <- function(object, name) {
@@ -129,6 +137,7 @@ DefaultAssay(single) <- "RNA"
 single[["percent.mt"]] <- PercentageFeatureSet(single, pattern = "^mt-")
 single <- db_scDblFinder(single, assay = "RNA", db_rate = 0.01, verbose = FALSE)
 qc_before <- single[[]]
+single_qc <- single
 keep <- with(qc_before,
   db.scDblFinder_class == "singlet" & nFeature_RNA >= 1000 &
     nFeature_RNA <= 5000 & percent.mt < 5
@@ -151,7 +160,10 @@ single <- FindClusters(single, resolution = c(0.2, 0.4, 0.8), verbose = FALSE, r
 cluster_cols <- grep("RNA_snn_res", colnames(single[[]]), value = TRUE)
 tree_plot <- ClusterTreePlot(single, cluster_cols = cluster_cols, title = "Resolution stability on real mouse pancreas", verbose = FALSE) +
   theme_learn() + theme(legend.position = "none")
-tree_file <- save_plot(tree_plot, "single-cluster-tree", width = 8.5, height = 5.4)
+tree_file <- save_plot(
+  tree_plot, "single-cluster-tree", "scop::ClusterTreePlot", "pancreas_sub",
+  checkpoint_path("single-pancreas"), width = 8.5, height = 5.4
+)
 estimated_dims <- RunDimsEstimate(single, reduction = "pca", method = "ensemble", min_dims = 5, verbose = FALSE)
 dims_use <- seq_len(min(20L, max(5L, as.integer(estimated_dims))))
 single <- RunUMAP(single, reduction = "pca", dims = dims_use, reduction.name = "umap", seed.use = seed, verbose = FALSE)
@@ -166,21 +178,41 @@ names(majority)[2] <- "predicted"
 single$cluster_majority_label <- majority$predicted[match(as.character(Idents(single)), majority$cluster)]
 annotation_accuracy <- mean(single$cluster_majority_label == single$CellType)
 
-qc_long <- rbind(
-  data.frame(stage = "Before", metric = "Detected genes", value = qc_before$nFeature_RNA),
-  data.frame(stage = "After", metric = "Detected genes", value = single$nFeature_RNA),
-  data.frame(stage = "Before", metric = "Mitochondrial percent", value = qc_before$percent.mt),
-  data.frame(stage = "After", metric = "Mitochondrial percent", value = single$percent.mt)
+qc_before_plot <- FeatureStatPlot(
+  single_qc, stat.by = c("nFeature_RNA", "percent.mt"), layer = "counts",
+  plot_type = "violin", combine = TRUE, ncol = 2, ylab = "Observed value",
+  title = "Before filtering", legend.position = "none", verbose = FALSE
 )
-qc_long$stage <- factor(qc_long$stage, levels = c("Before", "After"))
-qc_plot <- ggplot(qc_long, aes(stage, value, fill = stage)) +
-  geom_violin(scale = "width", trim = TRUE) + geom_boxplot(width = 0.12, outlier.shape = NA, colour = "#172033") +
-  facet_wrap(~metric, scales = "free_y") + scale_fill_manual(values = c(Before = "#9fb7c5", After = "#d97745")) +
-  labs(title = "QC is measured before thresholds are chosen", subtitle = "Real pancreas_sub cells; doublets and boundary failures are removed", x = NULL, y = NULL) + theme_learn() + guides(fill = "none")
-qc_file <- save_plot(qc_plot, "single-qc", width = 8.5, height = 4.8)
-umap_plot <- DimPlot(single, reduction = "umap", group.by = "CellType", pt.size = 0.65, raster = FALSE) +
-  labs(title = "Mouse pancreatic endocrinogenesis", subtitle = "Known CellType labels are shown for biological validation") + theme_learn()
-umap_file <- save_plot(umap_plot, "single-umap", width = 8.5, height = 5.7)
+qc_after_plot <- FeatureStatPlot(
+  single, stat.by = c("nFeature_RNA", "percent.mt"), layer = "counts",
+  plot_type = "violin", combine = TRUE, ncol = 2, ylab = "Observed value",
+  title = "After filtering", legend.position = "none", verbose = FALSE
+)
+qc_plot <- (qc_before_plot / qc_after_plot) + plot_annotation(
+  title = "SCOP FeatureStatPlot · real pancreas QC",
+  subtitle = "The same metrics are shown before and after the recorded filtering decision"
+)
+qc_file <- save_plot(
+  qc_plot, "single-qc", "scop::FeatureStatPlot", "pancreas_sub",
+  checkpoint_path("single-pancreas"), width = 9.5, height = 7
+)
+umap_plot <- CellDimPlot(
+  single, group.by = "CellType", label.by = "CellType", legend.by = "CellType",
+  reduction = "umap", show_stat = FALSE, pt.size = 0.65, raster = FALSE,
+  title = "SCOP CellDimPlot · mouse pancreatic endocrinogenesis", verbose = FALSE
+)
+umap_file <- save_plot(
+  umap_plot, "single-umap", "scop::CellDimPlot", "pancreas_sub",
+  checkpoint_path("single-pancreas"), width = 9.5, height = 6
+)
+dims_plot <- DimsEstimatePlot(
+  single, reduction = "pca", max_pcs = 30,
+  title = "SCOP DimsEstimatePlot · evidence for PC selection", verbose = FALSE
+)
+dims_file <- save_plot(
+  dims_plot, "single-dims-estimate", "scop::DimsEstimatePlot", "pancreas_sub",
+  checkpoint_path("single-pancreas"), width = 9, height = 5.5
+)
 single_checkpoint <- save_checkpoint(single, "single-pancreas")
 single_manifest <- list(
   dataset = "pancreas_sub", source = "Bastidas-Ponce et al. 2019 / scVelo",
@@ -193,7 +225,12 @@ single_manifest <- list(
   estimated_dims = as.integer(estimated_dims), dims_used = dims_use,
   final_cluster_column = final_cluster, clusters = length(unique(Idents(single))),
   cluster_majority_accuracy_against_known_CellType = round(annotation_accuracy, 4),
-  figures = list(qc = list(path = qc_file, sha256 = sha256(qc_file)), umap = list(path = umap_file, sha256 = sha256(umap_file)), cluster_tree = list(path = tree_file, sha256 = sha256(tree_file))),
+  figures = list(
+    qc = list(path = qc_file, sha256 = sha256(qc_file), plot_function = "scop::FeatureStatPlot"),
+    umap = list(path = umap_file, sha256 = sha256(umap_file), plot_function = "scop::CellDimPlot"),
+    cluster_tree = list(path = tree_file, sha256 = sha256(tree_file), plot_function = "scop::ClusterTreePlot"),
+    dims_estimate = list(path = dims_file, sha256 = sha256(dims_file), plot_function = "scop::DimsEstimatePlot")
+  ),
   checkpoint = single_checkpoint,
   claim_boundary = "Cluster-majority accuracy is an internal concordance check against bundled labels, not independent biological validation."
 )
@@ -223,12 +260,33 @@ knn_scores <- function(embedding, source, biology, k = 20L) {
 before_score <- knn_scores(Embeddings(cross, "Harmonypca")[, 1:20], cross$dataset, cross$celltype)
 after_score <- knn_scores(Embeddings(cross, "Harmony")[, 1:20], cross$dataset, cross$celltype)
 
-source_before <- DimPlot(cross, reduction = "SourceUMAP", group.by = "dataset", pt.size = 0.45, raster = FALSE) + ggtitle("Before Harmony · source") + theme_learn() + NoLegend()
-source_after <- DimPlot(cross, reduction = "HarmonyUMAP2D", group.by = "dataset", pt.size = 0.45, raster = FALSE) + ggtitle("After Harmony · source") + theme_learn() + NoLegend()
-biology_after <- DimPlot(cross, reduction = "HarmonyUMAP2D", group.by = "celltype", pt.size = 0.45, raster = FALSE, label = TRUE, repel = TRUE, label.size = 3.1) +
-  ggtitle("After Harmony · cell type") + theme_learn() + NoLegend()
-integration_plot <- source_before | source_after | biology_after
-integration_file <- save_plot(integration_plot, "cross-source-integration", width = 13, height = 5.4)
+source_before <- CellDimPlot(
+  cross, group.by = "dataset", reduction = "SourceUMAP", show_stat = FALSE,
+  pt.size = 0.45, raster = FALSE, title = "Before Harmony · source",
+  legend.position = "bottom", legend.direction = "horizontal", verbose = FALSE
+)
+source_after <- CellDimPlot(
+  cross, group.by = "dataset", reduction = "HarmonyUMAP2D", show_stat = FALSE,
+  pt.size = 0.45, raster = FALSE, title = "After Harmony · source",
+  legend.position = "bottom", legend.direction = "horizontal", verbose = FALSE
+)
+biology_after <- CellDimPlot(
+  cross, group.by = "celltype", label.by = "celltype",
+  reduction = "HarmonyUMAP2D", show_stat = FALSE, pt.size = 0.45,
+  raster = FALSE, label = TRUE, label_insitu = TRUE, label_repel = TRUE,
+  label.size = 3.3, label.fg = "#07111f", label.bg = "white",
+  aspect.ratio = 0.55,
+  title = "After Harmony · cell type",
+  legend.position = "none", verbose = FALSE
+)
+source_pair <- (source_before | source_after) + plot_layout(guides = "collect") &
+  theme(legend.position = "bottom")
+integration_plot <- (source_pair / biology_after) + plot_layout(heights = c(1, 1.1)) +
+  plot_annotation(title = "SCOP CellDimPlot · cross-source integration audit")
+integration_file <- save_plot(
+  integration_plot, "cross-source-integration", "scop::CellDimPlot", "panc8_sub",
+  checkpoint_path("cross-source-panc8"), width = 12, height = 10
+)
 
 Idents(cross) <- cross$Harmonyclusters
 cross_majority <- aggregate(cross$celltype, list(cluster = as.character(Idents(cross))), function(x) names(sort(table(x), decreasing = TRUE))[1])
@@ -256,9 +314,16 @@ pbmc <- ScaleData(pbmc, features = VariableFeatures(pbmc), verbose = FALSE)
 pbmc <- RunPCA(pbmc, npcs = 20, verbose = FALSE)
 pbmc <- RunUMAP(pbmc, dims = 1:15, seed.use = seed, verbose = FALSE)
 marker_panel <- intersect(c("MS4A1", "CD79A", "CD3D", "IL7R", "CD8A", "NKG7", "GNLY", "LYZ", "S100A8", "FCGR3A", "FCER1A"), rownames(pbmc))
-annotation_plot <- DotPlot(pbmc, features = marker_panel, group.by = "CellType", assay = "RNA") +
-  coord_flip() + labs(title = "Marker evidence for PBMC annotation", subtitle = "Real paired RNA + ATAC PBMC subset", x = NULL, y = NULL) + theme_learn()
-annotation_file <- save_plot(annotation_plot, "annotation-marker-evidence", width = 8.5, height = 6)
+annotation_heatmap <- GroupHeatmap(
+  pbmc, features = marker_panel, group.by = "CellType", assay = "RNA", layer = "data",
+  exp_method = "zscore", show_row_names = FALSE, show_column_names = TRUE,
+  cluster_rows = FALSE, cluster_columns = FALSE,
+  column_title = "Bundled CellType", legend.position = "right", verbose = FALSE
+)
+annotation_file <- save_plot(
+  annotation_heatmap$plot, "annotation-marker-evidence", "scop::GroupHeatmap",
+  "pbmcmultiome_sub", "runtime-loaded normalized object", width = 10, height = 6
+)
 
 set.seed(seed)
 reference_cells <- unlist(tapply(colnames(pbmc), pbmc$CellType, function(x) sample(x, ceiling(length(x) * 0.6))))
@@ -314,11 +379,19 @@ deg$gene <- rownames(deg)
 deg <- deg[, c("gene", setdiff(colnames(deg), "gene"))]
 write.csv(deg, "evidence/real-data/pseudobulk-alpha-vs-beta.csv", row.names = FALSE)
 deg$significant <- deg$FDR < 0.05 & abs(deg$logFC) >= 1
-volcano <- ggplot(deg, aes(logFC, -log10(pmax(FDR, 1e-300)), colour = significant)) +
-  geom_point(alpha = 0.55, size = 1.25) + geom_vline(xintercept = c(-1, 1), linetype = 2, colour = "#60758a") +
-  scale_colour_manual(values = c(`FALSE` = "#9fb7c5", `TRUE` = "#d97745")) +
-  labs(title = "Pseudobulk alpha–beta contrast across technical sources", subtitle = "edgeR paired by dataset; demonstration, not patient-level inference", x = "log2 fold change (beta / alpha)", y = "−log10 FDR") + theme_learn() + guides(colour = "none")
-volcano_file <- save_plot(volcano, "advanced-pseudobulk", width = 8.5, height = 5.4)
+volcano_input <- transform(deg, avg_log2FC = logFC, p_val_adj = FDR, p_val = PValue)
+rownames(volcano_input) <- volcano_input$gene
+volcano <- VolcanoPlot(
+  res = volcano_input, x_metric = "avg_log2FC", y_metric = "p_val_adj",
+  DE_threshold = "abs(avg_log2FC) >= 1 & p_val_adj < 0.05", nlabel = 12,
+  features_label = head(volcano_input$gene[order(volcano_input$p_val_adj)], 8),
+  xlab = "log2 fold change (beta / alpha)", ylab = "−log10 adjusted P (FDR)",
+  verbose = FALSE
+) + ggtitle("SCOP VolcanoPlot · paired pseudobulk alpha–beta contrast")
+volcano_file <- save_plot(
+  volcano, "advanced-pseudobulk", "scop::VolcanoPlot", "panc8_sub",
+  "edgeR dataset-by-celltype pseudobulk table", width = 9, height = 6
+)
 
 annotation_manifest <- list(
   dataset = "pbmcmultiome_sub", cells = ncol(pbmc), truth_labels = as_named_counts(pbmc$CellType), marker_panel = marker_panel,
@@ -345,32 +418,71 @@ spatial <- RunSpotQC(spatial, assay = "Spatial", return_filtered = FALSE, qc_met
 spatial <- NormalizeData(spatial, assay = "Spatial", verbose = FALSE)
 spatial <- RunSpatialVariableFeatures(spatial, assay = "Spatial", method = "moran", coord.cols = c("x", "y"), nfeatures = 100, min_spots = 10, store_results = TRUE, verbose = FALSE, seed = seed)
 spatial <- RunSpatialNetwork(spatial, method = "knn", image = "slice1", coord.cols = c("x", "y"), k = 6, graph.name = "scop_knn", overwrite = TRUE, verbose = FALSE)
-spatial <- RunSpatialNeighborhood(spatial, group.by = "coda_label", method = "observed", coord.cols = c("x", "y"), image = "slice1", k = 6, tool_name = "coda_neighborhood", store_results = TRUE, verbose = FALSE)
+spatial <- RunSpatialNeighborhood(spatial, group.by = "coda_label", method = "observed", coord.cols = c("x", "y"), image = "slice1", k = 6, tool_name = "SpatialNeighborhood", store_results = TRUE, verbose = FALSE)
 spatial_features <- head(VariableFeatures(spatial), 20)
 top_spatial_gene <- spatial_features[1]
-spatial_meta <- spatial[[]]
-spatial_meta$expression <- as.numeric(GetAssayData(spatial, assay = "Spatial", layer = "data")[top_spatial_gene, rownames(spatial_meta)])
-domain_plot <- ggplot(spatial_meta, aes(x, -y, colour = coda_label)) +
-  geom_point(size = 1.4) + coord_equal() +
-  labs(title = "Human PanIN spatial domains", subtitle = "GSE254829 · GSM8058244 · real Visium spots", x = NULL, y = NULL, colour = "CoDa label") + theme_learn()
-gene_plot <- ggplot(spatial_meta, aes(x, -y, colour = expression)) +
-  geom_point(size = 1.4) + coord_equal() + scale_colour_viridis_c() +
-  labs(title = paste("Top Moran feature:", top_spatial_gene), subtitle = "Spatially variable expression on the same tissue coordinates", x = NULL, y = NULL, colour = "Log expression") + theme_learn()
+domain_plot <- SpatialSpotPlot(
+  spatial, group.by = "coda_label", image = "slice1", overlay_image = FALSE,
+  coord.cols = c("x", "y"), pt.size = 1.4, verbose = FALSE
+) + ggtitle("SCOP SpatialSpotPlot · bundled spot domains")
+gene_plot <- SpatialVariableFeaturePlot(
+  spatial, plot_type = "surface", features = top_spatial_gene, assay = "Spatial",
+  layer = "data", image = "slice1", overlay_image = FALSE,
+  coord.cols = c("x", "y"), pt.size = 1.4
+) + plot_annotation(title = paste("SCOP SpatialVariableFeaturePlot ·", top_spatial_gene))
 spatial_plot <- domain_plot | gene_plot
-spatial_file <- save_plot(spatial_plot, "spatial-human-pancreas", width = 12, height = 5.5)
+spatial_file <- save_plot(
+  spatial_plot, "spatial-human-pancreas",
+  "scop::SpatialSpotPlot + scop::SpatialVariableFeaturePlot",
+  "visium_human_pancreas_sub", checkpoint_path("spatial-human-pancreas"),
+  width = 13, height = 6
+)
+network_plot <- SpatialNetworkPlot(
+  object = spatial, graph.name = "scop_knn", group.by = "coda_label",
+  pt.size = 1.2, edge.linewidth = 0.15
+) + ggtitle("SCOP SpatialNetworkPlot · native KNN graph")
+network_file <- save_plot(
+  network_plot, "spatial-network", "scop::SpatialNetworkPlot",
+  "visium_human_pancreas_sub", checkpoint_path("spatial-human-pancreas"),
+  width = 8, height = 7
+)
+neighborhood_plot <- SpatialNeighborhoodPlot(
+  spatial, method = "observed", plot_type = "heatmap", top_n = 30, verbose = FALSE
+) + plot_annotation(title = "SCOP SpatialNeighborhoodPlot · observed spot-domain contacts")
+neighborhood_file <- save_plot(
+  neighborhood_plot, "spatial-neighborhood", "scop::SpatialNeighborhoodPlot",
+  "visium_human_pancreas_sub", checkpoint_path("spatial-human-pancreas"),
+  width = 9, height = 7
+)
 
 data(visium_mouse_brain_slices_sub, package = "scop")
 brain <- visium_mouse_brain_slices_sub
-brain_meta <- brain[[]]
-brain_plot <- ggplot(brain_meta, aes(x, -y, colour = region)) + geom_point(size = 0.9) + coord_equal() +
-  facet_wrap(~slice) + labs(title = "Two real mouse-brain Visium slices", subtitle = "Multi-slice structure is preserved before integration", x = NULL, y = NULL, colour = "Region") + theme_learn()
-brain_file <- save_plot(brain_plot, "spatial-mouse-brain-slices", width = 10, height = 4.8)
+brain_slice1 <- SpatialSpotPlot(
+  brain, group.by = "region", image = "anterior1", cells = Cells(brain[["anterior1"]]),
+  overlay_image = FALSE, pt.size = 0.9, verbose = FALSE
+) + ggtitle("Slice 1 · anterior1")
+brain_slice2 <- SpatialSpotPlot(
+  brain, group.by = "region", image = "anterior2", cells = Cells(brain[["anterior2"]]),
+  overlay_image = FALSE, pt.size = 0.9, verbose = FALSE
+) + ggtitle("Slice 2 · anterior2")
+brain_plot <- (brain_slice1 | brain_slice2) +
+  plot_annotation(title = "SCOP SpatialSpotPlot · two real brain slices")
+brain_file <- save_plot(
+  brain_plot, "spatial-mouse-brain-slices", "scop::SpatialSpotPlot",
+  "visium_mouse_brain_slices_sub", "runtime-loaded two-image object",
+  width = 11, height = 5.5
+)
 spatial_checkpoint <- save_checkpoint(spatial, "spatial-human-pancreas")
 spatial_manifest <- list(
   human_pancreas = list(dataset = "visium_human_pancreas_sub", spots = ncol(spatial), genes = nrow(spatial), image = Images(spatial), labels = as_named_counts(spatial$coda_label), top_moran_features = spatial_features),
   mouse_brain = list(dataset = "visium_mouse_brain_slices_sub", spots = ncol(brain), genes = nrow(brain), slices = as_named_counts(brain$slice), regions = as_named_counts(brain$region)),
   workflow = c("RunSpotQC", "NormalizeData", "RunSpatialVariableFeatures(method='moran')", "RunSpatialNetwork", "RunSpatialNeighborhood(method='observed')"),
-  figures = list(human_pancreas = list(path = spatial_file, sha256 = sha256(spatial_file)), mouse_brain = list(path = brain_file, sha256 = sha256(brain_file))),
+  figures = list(
+    human_pancreas = list(path = spatial_file, sha256 = sha256(spatial_file), plot_function = "scop::SpatialSpotPlot + scop::SpatialVariableFeaturePlot"),
+    spatial_network = list(path = network_file, sha256 = sha256(network_file), plot_function = "scop::SpatialNetworkPlot"),
+    spatial_neighborhood = list(path = neighborhood_file, sha256 = sha256(neighborhood_file), plot_function = "scop::SpatialNeighborhoodPlot"),
+    mouse_brain = list(path = brain_file, sha256 = sha256(brain_file), plot_function = "scop::SpatialSpotPlot")
+  ),
   checkpoint = spatial_checkpoint,
   deconvolution = list(executed = FALSE, method = "RunRCTD", reason = "spacexr is not installed in the audited runtime; no deconvolution result is fabricated."),
   claim_boundary = "Visium spots are mixtures. Domain and Moran results are spot-level spatial patterns, not cell-resolved identities."
@@ -383,13 +495,24 @@ figures <- list.files("assets/figures/real-data", pattern = "\\.png$", full.name
 manifest <- list(
   schema_version = 1, generated_at = format(Sys.time(), tz = "Asia/Shanghai", usetz = TRUE), seed = seed,
   components = stats::setNames(lapply(component_files, function(x) list(path = json_path(x), sha256 = sha256(json_path(x)))), component_files),
-  figures = stats::setNames(lapply(figures, function(x) list(path = x, sha256 = sha256(x), bytes = unname(file.info(x)$size))), basename(figures)),
+  figures = stats::setNames(lapply(figures, function(x) {
+    provenance <- figure_registry[[basename(x)]]
+    c(
+      list(path = x, sha256 = sha256(x), bytes = unname(file.info(x)$size)),
+      provenance[c("plot_function", "dataset", "source_checkpoint")]
+    )
+  }), basename(figures)),
   critical_assertions = list(
     real_10x_roundtrip = all(unlist(input_manifest$validations)),
     single_sample_retained_cells = ncol(single) > 900,
     cross_source_has_harmony = "Harmony" %in% Reductions(cross),
     pseudobulk_has_results = nrow(deg) > 1000,
     spatial_has_moran_features = length(spatial_features) >= 20,
+    all_analysis_figures_use_scop_plotters = all(vapply(
+      figure_registry,
+      function(x) all(startsWith(strsplit(x$plot_function, " + ", fixed = TRUE)[[1]], "scop::")),
+      logical(1)
+    )),
     no_synthetic_primary_evidence = TRUE
   )
 )

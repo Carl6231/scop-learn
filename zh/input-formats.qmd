@@ -1,110 +1,384 @@
 ---
-title: "不同单细胞文件怎么读取"
-description: "10x H5、10x 三件套、RDS、H5AD、Loom 和多样本输入的可执行读取方案。"
+title: "读取单细胞输入格式"
+description: "详细且可审计地读取 10x H5、三件套、RDS、H5AD、Loom、文本矩阵、multiome 和多样本数据，再进入 SCOP。"
 ---
 
-SCOP 不负责替代所有底层文件读取器。先用格式原生函数读取或转换成 Seurat，再进入 SCOP 流程。读取后立刻检查维度、稀疏性、feature 名称、barcode 唯一性、assay、layer 和元数据。
+SCOP 从有效对象开始，不需要替代所有 format-native reader。安全流程是：**识别文件合同 → 不破坏 sparsity 地读取 → 构建/转换 Seurat 对象 → 审计 counts、features、barcodes、assays、layers、reductions 和 metadata → 保存不可变 import checkpoint**。
 
-## 10x H5 {#x-h5}
+::: {.learning-objectives}
+## 学习目标
+
+你将学会：
+
+1. 根据收到的文件选择正确 reader；
+2. 安全读取 10x H5 和 10x 三件套；
+3. 审计 RDS，而不是信任其 preprocessing history；
+4. 通过 SCOP 转换 H5AD/Loom，并验证转换损失；
+5. 导入 CSV/TSV 时保护 sparse matrix；
+6. merge 前保留 modalities 和 sample-level metadata；
+7. 生成统一 object audit 与 checkpoint。
+:::
+
+## 1 · 根据磁盘上的证据选择 reader
+
+| 文件 | Reader | 预期结果 | 必须停止的情况 |
+|---|---|---|---|
+| `filtered_feature_bc_matrix.h5` | `Seurat::Read10X_h5()` | sparse matrix 或 modality list | 缺 Gene Expression 或 dimensions 异常 |
+| `matrix.mtx(.gz)` + `features.tsv(.gz)` + `barcodes.tsv(.gz)` | `Seurat::Read10X()` | sparse matrix 或 modality list | 文件缺失、跨样本混用或重排 |
+| `.rds` | `readRDS()` | 通常是 Seurat object | class、counts、sample identity 或 provenance 缺失 |
+| `.h5ad` | `scop::h5ad_to_srt()` | Seurat object | counts/categories/layers 在转换中丢失 |
+| `.loom` | `scop::loom_to_srt()` | 可含 spliced layers 的对象 | feature/cell IDs 或 layers 不一致 |
+| CSV/TSV | `read.delim()` 后转 sparse | sparse matrix → Seurat | orientation、数值或唯一 ID 不清楚 |
+| 多样本 | 每个样本分别读取 | 命名 Seurat list | `sample_id` 与 design metadata 未锁定 |
+| SCOP dataset name | `LoadScopDataset()` | dataset-dependent | 未审计 source/version 与对象 |
+
+::: {.input-contract}
+**应向数据提供者索取的最低信息**
+
+- 文件格式及生成 pipeline/version；
+- species 与 genome build；
+- feature ID 类型；
+- raw 还是 filtered matrix；
+- sample、patient、condition、batch、chemistry 和 library IDs；
+- barcodes 跨 library 是否唯一；
+- 是否包含 counts、normalized expression、embeddings 和 annotations；
+- 预期 feature/cell 数和 checksum。
+:::
+
+## 2 · 通用 post-import audit
 
 ```r
+library(scop)
 library(Seurat)
+library(Matrix)
 
-raw <- Read10X_h5("filtered_feature_bc_matrix.h5")
+audit_srt <- function(srt, expected_samples = NULL) {
+  stopifnot(inherits(srt, "Seurat"))
+  assay <- DefaultAssay(srt)
+  layers <- Layers(srt[[assay]])
+  stopifnot("counts" %in% layers)
+
+  counts <- LayerData(srt, assay = assay, layer = "counts")
+  stopifnot(nrow(counts) > 0, ncol(counts) > 0)
+  stopifnot(!anyDuplicated(rownames(counts)))
+  stopifnot(!anyDuplicated(colnames(counts)))
+  stopifnot(nrow(srt[[]]) == ncol(srt))
+  stopifnot(all(rownames(srt[[]]) == colnames(srt)))
+
+  if (!is.null(expected_samples)) {
+    stopifnot("sample_id" %in% colnames(srt[[]]))
+    stopifnot(setequal(unique(srt$sample_id), expected_samples))
+  }
+
+  list(
+    dimensions = dim(srt),
+    default_assay = assay,
+    assays = Assays(srt),
+    layers = layers,
+    sparse_counts = inherits(counts, "sparseMatrix"),
+    total_counts = sum(counts),
+    metadata = colnames(srt[[]]),
+    reductions = Reductions(srt),
+    graphs = Graphs(srt)
+  )
+}
+```
+
+Source 中的 feature symbols 可能重复。若 reader 将其 unique 化，应在 feature metadata 或外部 mapping table 中保留稳定原始 ID，不能静默把不同 Ensembl IDs 合并成一个 symbol。
+
+## 3 · 10x H5 {#10x-h5}
+
+执行案例使用官方 10x PBMC 1k v3 filtered H5。
+
+```r
+h5_path <- "artifacts/real-data/input/pbmc_1k_v3_filtered_feature_bc_matrix.h5"
+raw <- Read10X_h5(h5_path, use.names = TRUE, unique.features = TRUE)
+
+if (is.list(raw)) {
+  stopifnot("Gene Expression" %in% names(raw))
+  counts <- raw[["Gene Expression"]]
+} else {
+  counts <- raw
+}
+
+srt <- CreateSeuratObject(
+  counts = counts,
+  project = "pbmc_1k_v3",
+  min.cells = 0,
+  min.features = 0
+)
+srt$sample_id <- "PBMC1K_V3"
+srt$technology <- "10x_3prime_v3"
+audit_srt(srt, expected_samples = "PBMC1K_V3")
+```
+
+| 检查 | 实际值 |
+|---|---:|
+| features | 33,538 |
+| cells | 1,222 |
+| total UMIs | 9,235,144 |
+| SHA-256 | `8191f576550c1b449d03441b9eb098ee9f73fa82513d171ba87d31d551e3ffda` |
+
+若 H5 返回 RNA、antibody 和 CRISPR/peaks，不要丢弃非 RNA 元素。每个 modality 建一个 assay，并做各自 QC。
+
+```r
+raw <- Read10X_h5("multi_feature_sample.h5")
+srt <- CreateSeuratObject(raw[["Gene Expression"]], assay = "RNA")
+if ("Antibody Capture" %in% names(raw)) {
+  srt[["ADT"]] <- CreateAssay5Object(counts = raw[["Antibody Capture"]])
+}
+if ("Peaks" %in% names(raw)) {
+  stop("Peak import requires its genome and fragment-file contract")
+}
+```
+
+## 4 · 10x 三件套 {#10x-three-file-directory}
+
+一个目录必须包含来自同一 library 的匹配文件：
+
+```text
+filtered_feature_bc_matrix/
+├── barcodes.tsv.gz
+├── features.tsv.gz
+└── matrix.mtx.gz
+```
+
+```r
+dir_path <- "data/S01/filtered_feature_bc_matrix"
+required <- c("matrix.mtx.gz", "features.tsv.gz", "barcodes.tsv.gz")
+stopifnot(all(file.exists(file.path(dir_path, required))))
+
+raw <- Read10X(
+  data.dir = dir_path,
+  gene.column = 2,
+  unique.features = TRUE,
+  strip.suffix = FALSE
+)
 counts <- if (is.list(raw)) raw[["Gene Expression"]] else raw
-srt <- CreateSeuratObject(counts, project = "study_name")
-
-dim(srt)
-sum(duplicated(rownames(srt)))
-sum(duplicated(colnames(srt)))
+srt <- CreateSeuratObject(counts, project = "S01")
+srt$sample_id <- "S01"
+audit_srt(srt, expected_samples = "S01")
 ```
 
-本站实际读取的是官方 PBMC 1k v3 H5：**33,538 个特征、1,222 个细胞、9,235,144 个 UMI**，SHA-256 为 `8191f576…ffda`。若 H5 同时含抗体或 peaks，`Read10X_h5()` 会返回 list，不能把不同模态随便拼成一张 RNA 矩阵。
+真实 evidence 从 H5 重建三件套，并证明 **dimensions** 与 **total UMIs** 完全一致，不是肉眼检查。
 
-## 10x 三件套目录 {#x-三件套目录}
+| 现象 | 原因 | 修正 |
+|---|---|---|
+| barcode file missing | 目录层级错或改名 | 指向包含三个标准文件的目录 |
+| feature 数与 matrix rows 不同 | 跨 run 混用文件 | 重新获得一致三件套，不能截断 |
+| merge 后 barcode 冲突 | library 间 barcode sequence 相同 | merge 时加入稳定 sample prefix |
+| feature column 使用错误 | ID/name column 理解错误 | 检查 `features.tsv.gz` 并明确 `gene.column` |
 
-同一目录必须包含相互匹配的 `matrix.mtx.gz`、`features.tsv.gz` 和 `barcodes.tsv.gz`：
+## 5 · RDS：审计 history，而不只是 class {#rds}
 
 ```r
-counts <- Read10X("filtered_feature_bc_matrix/")
-srt <- CreateSeuratObject(counts, project = "study_name")
+obj <- readRDS("object.rds")
+stopifnot(inherits(obj, "Seurat"))
+audit_srt(obj)
+table(obj$sample_id, useNA = "ifany")
+table(obj$condition, useNA = "ifany")
 ```
-
-不要分别读取后对其中一张表排序。本站把真实 H5 重建成三件套后，验证维度和总 UMI 完全一致。
-
-## RDS {#rds}
-
-```r
-srt <- readRDS("object.rds")
-stopifnot(inherits(srt, "Seurat"))
-dim(srt)
-Assays(srt)
-Layers(srt[[DefaultAssay(srt)]])
-head(srt[[]])
-```
-
-RDS 可能已经包含归一化、降维、图或过期的 Idents。它只是一个需要审计的对象，不是上游处理正确的证明。
-
-## H5AD 与 Loom {#h5ad-与-loom}
-
-SCOP 提供转换函数：
-
-```r
-srt_h5ad <- scop::h5ad_to_srt("object.h5ad")
-srt_loom <- scop::loom_to_srt("object.loom")
-```
-
-本站审计的运行时没有安装 `zellkonverter` 和 `loomR`，所以不伪造已执行结果。转换后至少核对：
 
 ```r
 list(
-  dimensions = dim(srt_h5ad),
-  assays = Assays(srt_h5ad),
-  metadata = colnames(srt_h5ad[[]]),
-  reductions = Reductions(srt_h5ad)
+  active_ident = head(Idents(obj)),
+  assays = Assays(obj),
+  layers = lapply(Assays(obj), function(a) Layers(obj[[a]])),
+  reductions = Reductions(obj),
+  graphs = Graphs(obj),
+  commands = names(obj@commands),
+  tools = names(obj@tools),
+  misc = names(obj@misc)
 )
 ```
 
-还要确认 raw counts、分类元数据、embedding、spliced/unspliced 层和稳定 feature ID 是否保留。
-
-## CSV 或 TSV 矩阵
-
-稠密文本只适合小矩阵。先确认方向和 ID，再转为稀疏矩阵：
+RDS 可能含 stale UMAP、错误 default assay、integrated values 而非 counts、split Seurat v5 layers 或被覆盖的 identities。保留原文件，另存 audited checkpoint，不要覆盖收到的对象。
 
 ```r
-x <- read.delim("counts.tsv", row.names = 1, check.names = FALSE)
+saveRDS(obj, "artifacts/checkpoints/import-audited.rds", compress = FALSE)
+tools::md5sum("artifacts/checkpoints/import-audited.rds")
+```
+
+正式 manifest 应使用 SHA-256；MD5 这里只是本地快速示例。
+
+## 6 · 通过 SCOP 转换 H5AD {#h5ad-and-loom}
+
+```r
+stopifnot(file.exists("object.h5ad"))
+srt_h5ad <- scop::h5ad_to_srt(
+  path = "object.h5ad",
+  verbose = TRUE,
+  prepare_for_reticulate = TRUE
+)
+audit_srt(srt_h5ad)
+```
+
+该路径需要 `zellkonverter`。审计 runtime 未安装它，所以本站不声称执行了 H5AD。逐项验证：
+
+| AnnData source | 预期 Seurat destination | 验证 |
+|---|---|---|
+| `.X` | assay layer | 判断是 integer counts 还是 transformed values |
+| `.layers["counts"]` | `counts` layer | dimensions、total counts、integerness |
+| `.obs` | cell metadata | row names 与 barcodes 完全匹配 |
+| `.var` | feature metadata | feature order 和稳定 ID 保留 |
+| `.obsm["X_umap"]` | reduction | cells/dimensions 匹配 |
+| categorical `.obs` | factors/characters | levels 和 missing values 保留 |
+
+绝不能默认 `.X` 是 raw counts。进入 QC 或 pseudobulk 前记录选作 counts 的 AnnData layer。
+
+## 7 · 通过 SCOP 转换 Loom
+
+```r
+stopifnot(file.exists("object.loom"))
+srt_loom <- scop::loom_to_srt(
+  path = "object.loom",
+  layers = c("spliced", "unspliced"),
+  verbose = TRUE,
+  chunk_rows = 1000
+)
+audit_srt(srt_loom)
+Assays(srt_loom)
+```
+
+审计 runtime 缺 `loomR`，所以这是版本核对后的模板，不是执行证据。主矩阵、spliced、unspliced 的 cell 和 feature names 必须完全一致，否则 velocity 在建模前已经无效。
+
+## 8 · CSV 或 TSV matrix
+
+Dense text 只适合小矩阵。先检查前几行，再读取完整文件。
+
+```r
+x <- read.delim(
+  "counts.tsv",
+  row.names = 1,
+  check.names = FALSE,
+  stringsAsFactors = FALSE
+)
+stopifnot(nrow(x) > 0, ncol(x) > 0)
 stopifnot(all(vapply(x, is.numeric, logical(1))))
 stopifnot(!anyDuplicated(rownames(x)), !anyDuplicated(colnames(x)))
-# 合同：行是 genes，列是 cells
-counts <- Matrix::Matrix(as.matrix(x), sparse = TRUE)
-srt <- CreateSeuratObject(counts)
+stopifnot(all(is.finite(as.matrix(x))))
+stopifnot(all(as.matrix(x) >= 0))
+
+# Contract: genes in rows, cells in columns.
+counts <- Matrix(as.matrix(x), sparse = TRUE)
+srt <- CreateSeuratObject(counts, project = "text_import")
+audit_srt(srt)
 ```
 
-若行名像 barcodes、列名像 genes，应停止并明确转置。大矩阵应保留 Matrix Market/H5 稀疏性，不要写成巨大 CSV。
+若 rows 像 barcodes 而 columns 像 genes，应停止并明确 transpose。负值、log 后小数、TPM、CPM 或 z-score 都不是 raw counts，不能作为 doublet、decontamination 或 pseudobulk count model 的原始输入。
 
-## 多模态输入
-
-当 10x 返回 RNA、抗体或 peaks 时，应建立独立 assays 并保留各模态 feature ID。`pbmcmultiome_sub` 有 `RNA` 与 `peaks`；只运行 RNA 流程不等于已经完成 ATAC QC、LSI 或 WNN。
-
-## 多个样本
-
-逐个读取，在 merge 前写入稳定的样本级元数据：
+## 9 · Multimodal objects
 
 ```r
-sample_dirs <- c(S01 = "data/S01/filtered_feature_bc_matrix",
-                 S02 = "data/S02/filtered_feature_bc_matrix")
-
-objects <- lapply(names(sample_dirs), function(id) {
-  x <- CreateSeuratObject(Read10X(sample_dirs[[id]]), project = id)
-  x$sample_id <- id
-  x$condition <- c(S01 = "control", S02 = "treated")[[id]]
-  x
-})
-names(objects) <- names(sample_dirs)
-
-merged <- merge(objects[[1]], y = objects[-1], add.cell.ids = names(objects))
+data(pbmcmultiome_sub, package = "scop")
+Assays(pbmcmultiome_sub)
+class(pbmcmultiome_sub[["RNA"]])
+class(pbmcmultiome_sub[["peaks"]])
 ```
 
-质控要按样本进行；只看合并后的全局分布，会把失败样本藏在总体阈值里。
+完成 RNA analysis 不代表 ATAC QC 有效。Peaks 必须保留 genome build、fragment file、TSS enrichment、nucleosome signal、peak coordinates、gene annotation 和 peak-calling history；ADT 需检查 isotype/background 及 modality-specific normalization。
 
-实际读取函数和往返断言见[输入证据清单](../evidence/real-data/input-formats.json)与[完整证据构建脚本](../scripts/build-real-evidence.R)。
+## 10 · 多个生物学样本
+
+先锁定 sample sheet：
+
+```r
+sample_sheet <- data.frame(
+  sample_id = c("S01", "S02"),
+  patient_id = c("P01", "P02"),
+  condition = c("control", "treated"),
+  batch = c("B1", "B1"),
+  path = c(
+    "data/S01/filtered_feature_bc_matrix",
+    "data/S02/filtered_feature_bc_matrix"
+  )
+)
+stopifnot(!anyDuplicated(sample_sheet$sample_id))
+stopifnot(all(file.exists(sample_sheet$path)))
+```
+
+逐样本读取与审计：
+
+```r
+objects <- setNames(lapply(seq_len(nrow(sample_sheet)), function(i) {
+  row <- sample_sheet[i, ]
+  raw <- Read10X(row$path)
+  counts <- if (is.list(raw)) raw[["Gene Expression"]] else raw
+
+  x <- CreateSeuratObject(counts, project = row$sample_id)
+  x$sample_id <- row$sample_id
+  x$patient_id <- row$patient_id
+  x$condition <- row$condition
+  x$batch <- row$batch
+  audit_srt(x, expected_samples = row$sample_id)
+  x
+}), sample_sheet$sample_id)
+```
+
+先做 per-sample QC，再 merge。Feature ID 不同必须用有记录的 mapping harmonize。之后给 barcode 加 prefix：
+
+```r
+merged <- merge(
+  objects[[1]],
+  y = objects[-1],
+  add.cell.ids = names(objects),
+  project = "study"
+)
+stopifnot(!anyDuplicated(colnames(merged)))
+stopifnot(setequal(unique(merged$sample_id), sample_sheet$sample_id))
+```
+
+Merge 后 Seurat v5 可能保留 split layers，这是预期行为。先审计并完成逐样本决策，再按[多样本章节](multi-sample.qmd)的构建节点执行 `JoinLayers()`。
+
+## 11 · SCOP-hosted 与 matrix-plus-metadata 输入
+
+```r
+path <- LoadScopDataset(
+  dataset = "dataset_name",
+  collection = "Xenium",
+  cache_dir = "artifacts/scop-datasets",
+  return_path = TRUE,
+  update = FALSE
+)
+
+srt <- FetchH5(
+  data_file = "matrix.h5",
+  meta_file = "metadata.csv",
+  name = "study_name",
+  assay = "RNA",
+  layer = "counts"
+)
+```
+
+这些函数不取消 provenance 要求。记录 dataset name、collection、URL/version、download checksum、metadata join key 和 post-import audit。
+
+::: {.checkpoint}
+**检查点——imported object**
+
+保存 source checksum、reader/arguments、feature/cell dimensions、total counts、assay/layer map、sparse status、feature-ID type、sample-design table、duplicate checks、conversion-loss report、object checkpoint hash，以及 R/SCOP/Seurat versions。
+:::
+
+## 常见失败
+
+| 现象 | 原因 | 处理 |
+|---|---|---|
+| import 时内存暴涨 | dense conversion | 停止，回到 H5/Matrix Market/sparse representation |
+| 没有 counts layer | 只提供 normalized matrix | 重新获取 counts 或明确限制 downstream methods |
+| metadata 出现 `NA` | barcode join mismatch | 统一 keys 并证明 one-to-one matching |
+| merge 后 cell names 重复 | 缺 sample prefix | 用稳定 `add.cell.ids` 重建 merge |
+| H5AD 像转置了 | feature/cell mapping 误解 | 与 AnnData source 对比 names/dimensions |
+| spliced/unspliced sizes 不同 | Loom layer misalignment | 停止 velocity 并修复 source mapping |
+| multi-feature H5 丢 ADT/peaks | 只保留 Gene Expression | 建 separate assays 并逐一审计 |
+| RDS 能打开但 counts 陈旧 | history/default assay 不清 | 保存原文件、审计 commands/layers，必要时重建 |
+
+::: {.exercise}
+## 练习
+
+选择一个真实收到的文件，写出 reader、预期 dimensions/ID type、必须保留的五个 metadata fields、audit command、一个 format-specific failure condition，以及 immutable checkpoint 的 path/checksum。合同通过前不要进入 QC。
+:::
+
+真实 H5 round-trip assertions 见 [input evidence manifest](../evidence/real-data/input-formats.json)，实现见 [evidence builder](../scripts/build-real-evidence.R)。
+
+::: {.boundary}
+10x H5、重建三件套和 RDS round-trip 已执行。H5AD/Loom 是准确的 SCOP 0.8.9 调用模板，但因可选 conversion backends 缺失而保持 `not executed`。文件能读取只证明结构，不证明生物学质量或研究设计有效。
+:::

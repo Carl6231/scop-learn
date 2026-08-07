@@ -1,84 +1,276 @@
 ---
 title: "Paper-scale analysis framework"
-description: "A reproducible figure, table, checkpoint, and claim framework for a complete single-cell paper using SCOP."
+description: "A complete, reproducible figure, table, checkpoint, and claim framework for a single-cell paper built with SCOP."
 ---
 
-This is a scaffold for a complete study—not a promise that every dataset can support every panel.
+This framework can support a full single-cell manuscript **when the study design and data support it**. It is not a promise that every dataset should fill every panel. The strongest paper usually has one coherent inferential centre and one well-justified mechanistic or spatial extension.
 
-## Phase 0 · Lock the scientific design
+::: {.learning-objectives}
+## Learning outcomes
 
-Write down:
+You will learn to:
 
-- cohort, inclusion/exclusion and biological sample count;
+1. translate a scientific question into phases, figures, tables, and checkpoints;
+2. keep raw data, constructed atlas, annotation, inference, and validation as separate evidence layers;
+3. define a minimum complete result for each main figure;
+4. choose one advanced extension whose assumptions match the study;
+5. stop honestly when replication, metadata, backend, or orthogonal evidence is missing.
+:::
+
+## 1 · Phase 0: lock the scientific design
+
+::: {.input-contract}
+**Study design contract**
+
+- cohort and inclusion/exclusion criteria;
+- biological sample, patient, library, batch, and condition definitions;
 - primary contrast and independent experimental unit;
-- technical batches and known confounders;
+- pairing/repeated-measures structure and planned covariates;
 - primary cell populations and outcomes;
 - confirmatory versus exploratory analyses;
-- stop rules when replication or backend requirements fail.
+- sample-size and rare-population limitations;
+- stopping rules for confounding, missing replication, and optional backends.
+:::
 
-## Phase 1 · Data and QC
+Create a sample sheet that can be audited before any cell-level analysis:
 
-**Inputs:** raw matrices and immutable sample sheet.
-**Actions:** [read format](input-formats.qmd), audit metadata, calculate per-sample QC, doublets and contamination, record retained cells.
-**Outputs:** QC distributions, sample-retention table, excluded-cell reasons, checkpoint.
-**Paper role:** Methods + Figure 1A/B + Supplementary QC.
+```r
+sample_sheet <- read.csv("metadata/sample-sheet.csv", stringsAsFactors = FALSE)
+required <- c("sample_id", "patient_id", "condition", "batch", "path")
+stopifnot(all(required %in% colnames(sample_sheet)))
+stopifnot(!anyDuplicated(sample_sheet$sample_id))
+stopifnot(all(file.exists(sample_sheet$path)))
 
-## Phase 2 · Atlas construction
+table(sample_sheet$condition)
+table(sample_sheet$condition, sample_sheet$batch)
+```
 
-**Actions:** `JoinLayers()` → normalization/SCT → PCA → `RunDimsEstimate()` → neighbours → multi-resolution clustering / `ClusterTreePlot()` → UMAP; integration only when justified.
-**Outputs:** pre/post-integration plots, batch-mixing and biology-preservation checks, resolution tree.
-**Paper role:** Figure 1C–F.
+If condition and batch are perfectly confounded, record the primary condition effect as not identifiable. Integration cannot repair a design matrix with no independent information.
 
-## Phase 3 · Annotation
+**Deliverables:** protocol/design note, locked sample sheet, data dictionary, primary contrast, covariate plan, claim boundary, analysis version.
 
-**Actions:** cluster markers → canonical markers → reference transfer / CellTypist / SingleR → conflict review → final label + confidence.
-**Outputs:** marker dot plot/heatmap, annotation provenance table, uncertain-cell count.
-**Paper role:** Figure 2 + annotation supplement.
+## 2 · Phase 1: immutable import and per-sample QC
 
-## Phase 4 · Core study result
+Follow the [input chapter](input-formats.qmd) and [single-sample QC contract](single-cell-case.qmd) for every library.
 
-For each major cell type:
+**Required analyses**
 
-- abundance by biological sample;
-- pseudobulk DEG for the primary contrast;
-- enrichment/GSEA from a defined ranked statistic;
-- sensitivity checks for covariates, thresholds, and low-count samples.
+1. source checksum and reader validation;
+2. feature/barcode uniqueness and assay/layer map;
+3. per-sample count, feature, mitochondrial and relevant tissue metrics;
+4. doublet assessment on raw library counts;
+5. ambient-RNA decision with original counts preserved;
+6. retained/excluded cells by sample and exclusion reason.
 
-**Paper role:** Figures 3–4. This is usually the inferential centre of the paper.
+**Figure 1A–B candidates**
 
-## Phase 5 · One coherent mechanistic extension
+- study design/cohort flow;
+- SCOP `FeatureStatPlot()` before and after filtering, faceted or reported per sample;
+- retained cells and QC distributions by sample.
 
-Choose only modules that support the main question:
+**Supplementary tables**
 
-| Question | SCOP path | Defensible output | Boundary |
-|---|---|---|---|
-| differentiation or state transition | `RunPAGA()`, `RunCytoTRACE()` | ordering / connectivity hypothesis | not lineage proof |
-| ligand–receptor hypothesis | `RunCellChat()` | candidate signalling network | not functional interaction proof |
-| transcriptional control | `RunSCENIC()` | candidate regulon activity | not TF binding proof |
-| metabolic programme | `RunMetabolism()` | relative pathway score | not metabolite flux |
-| malignancy-like state | `RunCNV()` | expression-derived CNV pattern | requires reference and orthogonal validation |
-| phenotype-linked cells | `RunScissor()` | phenotype-associated cell subset | depends on matched bulk phenotype design |
+| Table | Required columns |
+|---|---|
+| sample inventory | sample, patient, condition, batch, chemistry, raw cells |
+| QC retention | raw/retained cells, thresholds, doublets, exclusion reasons |
+| file provenance | source path/URL, checksum, reader, dimensions |
 
-**Paper role:** Figure 5. Avoid five disconnected tool outputs.
+::: {.checkpoint}
+**Gate 1 — QC complete**
 
-## Phase 6 · Spatial validation
+All retained samples have interpretable distributions, sample identities are intact, exclusions are traceable, original counts remain available, and no sample is silently removed. This authorizes atlas construction—not biological inference.
+:::
 
-If spatial data exists: spot QC → spatially variable features → domains/networks → neighbourhoods → reference-based deconvolution → test whether the single-cell candidate programme localises as expected.
-**Paper role:** Figure 6. Keep spot-level and cell-resolved claims separate.
+## 3 · Phase 2: atlas construction
 
-## Deliverable contract per chapter
+Use the fixed construction order:
 
-Every analysis chapter should contain:
+```r
+# after per-library doublet/QC decisions
+srt <- JoinLayers(srt)
+srt <- SCTransform(srt, assay = "RNA", vst.flavor = "v2", verbose = FALSE)
 
-1. question and rationale;
-2. input object and prerequisites;
-3. executable code and parameters;
-4. actual output figure/table;
-5. expected insight;
-6. interpretation boundary;
-7. failure modes and alternative route;
-8. checkpoint, seed, versions, and manifest hash.
+# clustering across a declared resolution grid
+srt <- FindNeighbors(srt, reduction = "pca", dims = 1:30)
+for (res in c(0.1, 0.2, 0.4, 0.6, 0.8, 1.0)) {
+  srt <- FindClusters(srt, resolution = res)
+}
+ClusterTreePlot(srt, prefix = "SCT_snn_res.")
 
-## Completion gate
+dims_use <- RunDimsEstimate(
+  srt,
+  reduction = "pca",
+  method = "ensemble",
+  min_dims = 5
+)
+```
 
-A study is analysis-complete only when all primary figures regenerate from checkpoints, sample-level models match the design, labels have traceable evidence, missing optional backends are declared, and every conclusion maps to a result—not merely to a method name.
+If integration is justified, run it with the technical variable and preserve a non-integrated comparison. Report pre/post source mixing and biology preservation; do not report only the final UMAP.
+
+**Figure 1C–F candidates**
+
+- SCOP cluster tree;
+- SCOP dimension-estimate plot;
+- SCOP `CellDimPlot()` by sample/source and reviewed labels;
+- pre/post integration diagnostic with numeric metrics.
+
+**Methods details:** normalization, HVF selection, linear reduction, integration function/arguments, dimensions, graph, clustering resolutions, UMAP seed, checkpoint hash.
+
+::: {.checkpoint}
+**Gate 2 — atlas stable**
+
+Dimensions and resolution have evidence, expected biology remains coherent, technical source effects are characterized, and integration has not erased the primary variable. This authorizes annotation.
+:::
+
+## 4 · Phase 3: annotation as reviewed evidence
+
+The [annotation chapter](annotation.qmd) defines the full path:
+
+1. cluster markers;
+2. positive and contradictory marker programmes;
+3. SCOP `GroupHeatmap()`;
+4. reference transfer and scores;
+5. CellTypist/SingleR or another appropriate reference method;
+6. doublet/low-quality review;
+7. consensus table with uncertain/unknown labels;
+8. cross-sample label distribution and stability.
+
+**Figure 2 candidates:** annotated SCOP UMAP, marker heatmap, selected feature panels, confidence/uncertainty distribution.
+
+**Annotation supplement:** one row per cluster with markers, contradictions, automated candidates/scores, final label, uncertainty, and reviewer note.
+
+::: {.checkpoint}
+**Gate 3 — annotation approved**
+
+Every final label maps to a marker programme and review record; mixed/unknown labels are retained; reference gaps are explicit; cluster IDs remain available. This authorizes cell-type-specific abundance and expression analyses.
+:::
+
+## 5 · Phase 4: the inferential centre
+
+For each prespecified major cell type:
+
+1. show cells per sample and sample coverage;
+2. estimate abundance by biological sample;
+3. aggregate raw counts to `sample × cell type`;
+4. fit the primary condition contrast and justified covariates;
+5. report effect sizes, uncertainty, FDR, and complete tables;
+6. test sensitivity to low-count samples, thresholds, pairing, and annotation uncertainty;
+7. run enrichment/GSEA from the defined statistic.
+
+**Figure 3 candidates:** per-sample composition with SCOP `ProportionTestPlot()`; effect-size plot; sample-level distributions.
+
+**Figure 4 candidates:** SCOP `VolcanoPlot()` for primary pseudobulk results; heatmap of sample-level expression; SCOP enrichment/GSEA plots.
+
+The statistical unit and design matrix belong in Methods and figure captions. Avoid per-cell P values as the primary condition evidence.
+
+::: {.checkpoint}
+**Gate 4 — primary result supported**
+
+The model matches biological replication; coefficient direction is checked; complete result tables regenerate the figures; sensitivity analyses do not overturn the central statement; the conclusion is no stronger than the observed cohort.
+:::
+
+## 6 · Phase 5: choose one mechanistic extension
+
+| Scientific question | SCOP runner | SCOP plotter | Defensible output | Required boundary |
+|---|---|---|---|---|
+| differentiation/state transition | `RunPAGA()`, `RunCytoTRACE()`, `RunSlingshot()` | `PAGAPlot()`, `CytoTRACEPlot()` | connectivity/order hypothesis | not lineage proof |
+| ligand–receptor hypothesis | `RunCellChat()` | `CCCNetworkPlot()`, `CCCHeatmap()` | candidate signalling network | not functional interaction proof |
+| transcriptional control | `RunSCENIC()` | `SCENICPlot()` | regulon activity | not TF binding proof |
+| metabolic programme | `RunMetabolism()` | `MetabolismPlot()` | relative pathway score | not metabolite flux |
+| malignancy-like state | `RunCNV()` | `CNVPlot()` | expression-derived CNV pattern | needs normal reference and orthogonal validation |
+| phenotype-linked cells | `RunScissor()` | `ScissorPlot()` | phenotype-associated subset | depends on aligned bulk phenotype design |
+
+Choose a module because it tests the main model, not because the package exports it. The [advanced chapter](advanced.qmd) gives exact input and stop contracts.
+
+**Figure 5:** one extension, one sensitivity check, one orthogonal validation plan. Five disconnected networks usually weaken rather than strengthen the narrative.
+
+## 7 · Phase 6: spatial validation when available
+
+Use the [spatial chapter](spatial-case.qmd):
+
+1. image/coordinate/sample audit;
+2. SCOP spot QC;
+3. spatially variable features;
+4. spatial network and neighbourhood analysis;
+5. optional deconvolution with a compatible reference;
+6. optional spatial communication after coordinate and label validation;
+7. test whether the single-cell candidate programme localizes in the expected region.
+
+**Figure 6 candidates:** SCOP `SpatialSpotPlot()`, `SpatialVariableFeaturePlot()`, `SpatialNetworkPlot()`, and `SpatialNeighborhoodPlot()`.
+
+Keep spot-domain, deconvolution, and cell-resolved claims separate. One section does not provide patient-level replication.
+
+## 8 · Figure-to-claim matrix
+
+Create this before drafting Results:
+
+| Figure | Question | Input checkpoint | Main function | Statistical unit | Result table | Allowed claim | Sensitivity |
+|---|---|---|---|---|---|---|---|
+| 1 | is the atlas technically credible? | QC/atlas | SCOP QC/dim/cluster plots | cell + sample summaries | QC table | construction quality | threshold/resolution |
+| 2 | what populations are present? | atlas | markers + `GroupHeatmap()` | clusters/cells | annotation table | reviewed identities | reference/marker stability |
+| 3 | which populations change? | annotation | proportion model | sample | abundance table | sample-level association | sample exclusion |
+| 4 | which programmes change? | annotation/counts | pseudobulk + `VolcanoPlot()` | sample | full DEG/enrichment | condition association | design/threshold |
+| 5 | what mechanism is suggested? | primary result | one advanced module | method-specific | complete module result | hypothesis | method/backend check |
+| 6 | where is it localized? | spatial QC | spatial SCOP functions | spots/sections | spatial result | spot-level localization | coordinate/reference check |
+
+Every Results sentence should point to one row. If a conclusion has no result table/checkpoint, it is not ready for the manuscript.
+
+## 9 · Reproducible project layout
+
+```text
+project/
+├── metadata/sample-sheet.csv
+├── scripts/00-preflight.R ... 07-spatial.R
+├── artifacts/checkpoints/        # large, immutable, usually not committed
+├── results/tables/                # complete machine-readable results
+├── results/figures/               # SCOP-native publication exports
+├── manifests/                     # checksums, versions, arguments, status
+├── reports/                       # rendered QC and analysis reports
+└── manuscript/                    # text that cites result IDs
+```
+
+Each script reads a prior checkpoint and writes a new one; it should not depend on hidden interactive state. Record `not executed` for optional modules rather than leaving ambiguous empty files.
+
+## 10 · Completion gate
+
+A paper analysis is complete only when:
+
+- all primary figures regenerate from named checkpoints;
+- every figure has a complete result table and provenance;
+- sample-level models match the design;
+- annotations have reviewed evidence and uncertainty;
+- integration has two-sided validation;
+- optional backend/database versions are recorded;
+- spatial claims respect spot/section units;
+- sensitivity analyses are resolved;
+- conclusions map to results rather than method names;
+- limitations include missing replication, reference gaps, and `not executed` modules.
+
+It is **not** complete merely because the UMAP is attractive, all planned functions returned objects, or the manuscript text has been drafted.
+
+::: {.checkpoint}
+**Final analysis gate**
+
+Freeze the input checksums, final object/checkpoint hashes, result-table hashes, figure hashes, code commit, environment/session record, and figure-to-claim matrix. A later manuscript edit must not silently change the computational result.
+:::
+
+## Common scope failures
+
+| Failure | Consequence | Repair |
+|---|---|---|
+| every available module becomes a figure | fragmented, multiple-testing-heavy story | keep one extension tied to the primary question |
+| cells are used as condition replicates | pseudo-replication | fit sample-level pseudobulk/composition models |
+| final labels overwrite cluster IDs | annotation audit lost | retain cluster, candidate, final, confidence fields |
+| optional backend failure is omitted | irreproducible Methods | record package/resource and `not executed` status |
+| spatial validation uses a different condition/tissue | weak or invalid validation | state incompatibility or choose a matched dataset |
+
+::: {.exercise}
+## Practice task
+
+Draft a six-row figure-to-claim matrix for your study. For each row include the independent unit, input checkpoint, SCOP function/plotter, complete table, sensitivity test, allowed sentence, and stop rule. Remove any figure that cannot fill every required column.
+:::
+
+::: {.boundary}
+This framework supports analysis and manuscript planning; it does not manufacture cohort size, clinical validity, causality, independent validation, or experimental confirmation. Those claims require evidence outside the workflow.
+:::

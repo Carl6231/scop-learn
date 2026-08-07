@@ -1,46 +1,211 @@
 ---
-title: "真实数据集图谱"
-description: "SCOP Learn 使用的真实数据集、来源、assay、规模和教学用途。"
+title: "真实数据集地图"
+description: "逐字段介绍 SCOP Learn 使用的全部真实数据：来源、尺寸、assays、metadata、教学用途、限制、加载代码与许可边界。"
 ---
 
-主教程使用 SCOP 自带的五个真实数据集，再加一个公开 10x H5；合成数据不再作为主要教学证据。
+SCOP Learn 的所有主要结果都使用真实数据。五个教学子集随 SCOP 0.8.9 提供；一个官方 10x H5 在 evidence 重建时下载。本页帮助你在选择 workflow 前明确每个对象能教什么、不能支持什么。
 
-| 数据集 | 物种 | 大小 | assay / 模态 | 教学用途 |
+::: {.learning-objectives}
+## 学习目标
+
+你将学会：
+
+1. 加载并审计每个 bundled teaching object；
+2. 区分 technical source、biological sample、patient、cell type 和 spatial slice；
+3. 根据 assay/metadata 选择能回答问题的数据；
+4. 识别不能替代 raw cohort 的 reduced/preprocessed data；
+5. 不虚构 licence 地记录 provenance 与 redistribution status。
+:::
+
+## 1 · 完整 inventory
+
+| Dataset | 物种 | Features × observations | Assays / modality | 教学用途 |
 |---|---|---:|---|---|
-| `pancreas_sub` | 小鼠 | 15,998 × 1,000 | RNA、spliced、unspliced | 单样本质控、聚类、可扩展轨迹分析 |
-| `panc8_sub` | 人 | 12,940 × 1,600 | RNA；8 个数据来源 | 跨来源整合与 pseudobulk 示例 |
-| `pbmcmultiome_sub` | 人 | 21,074 × 500 | RNA + peaks | marker、标签转移、CellTypist、多组学选择 |
-| `visium_human_pancreas_sub` | 人 | 5,000 × 1,986 | Spatial；一张组织图像 | PanIN spot 质控、Moran 特征、空间网络与邻域 |
-| `visium_mouse_brain_slices_sub` | 小鼠 | 4,000 × 2,000 | Spatial；两个切片 | 多切片审计与整合决策 |
-| 10x PBMC 1k v3 H5 | 人 | 33,538 × 1,222 | 过滤后的表达矩阵 | 原始文件读取与往返验证 |
+| `pancreas_sub` | mouse | 15,998 × 1,000 cells | RNA, spliced, unspliced | 单样本 QC、聚类、维度、trajectory prerequisites |
+| `panc8_sub` | human | 12,940 × 1,600 cells | RNA；8 个 dataset sources | cross-source integration 和 technical-source pseudobulk |
+| `pbmcmultiome_sub` | human | 21,074 × 500 cells | RNA + peaks | markers、reference transfer、CellTypist、multiome 边界 |
+| `visium_human_pancreas_sub` | human | 5,000 × 1,986 spots | Spatial；`slice1` | spot QC、Moran、network、neighbourhood、deconvolution decision |
+| `visium_mouse_brain_slices_sub` | mouse | 4,000 × 2,000 spots | Spatial；`anterior1/2` | multi-slice audit 与 spatial integration decision |
+| PBMC 1k v3 H5 | human | 33,538 × 1,222 cells | filtered 10x counts | H5/三件套/RDS round-trip |
 
-## 加载并审计自带数据
+::: {.input-contract}
+**数据集选择合同**
+
+使用教学数据前声明：biological question、所需 assay、所需独立单位、表示该单位的 metadata field、raw/preprocessed status、species、genome/ID assumptions，以及是否有足够 replication 支持预期结论。
+:::
+
+## 2 · 通用 bundled-object audit
 
 ```r
 library(scop)
 library(Seurat)
 
+dataset_audit <- function(x) {
+  list(
+    dimensions = dim(x),
+    assays = Assays(x),
+    default_assay = DefaultAssay(x),
+    layers = lapply(Assays(x), function(a) Layers(x[[a]])),
+    metadata = colnames(x[[]]),
+    reductions = Reductions(x),
+    images = Images(x),
+    cell_names_unique = !anyDuplicated(colnames(x)),
+    feature_names_unique = !anyDuplicated(rownames(x))
+  )
+}
+
 data(pancreas_sub, package = "scop")
-dim(pancreas_sub)
-Assays(pancreas_sub)
-colnames(pancreas_sub[[]])
-table(pancreas_sub$CellType)
+dataset_audit(pancreas_sub)
 ```
 
-每个对象都应先做同样的审计。元数据里实际存在的字段决定了能回答什么问题。例如 `panc8_sub$dataset` 是技术数据来源，不是患者编号。
+## 3 · `pancreas_sub`：真实发育胰腺子集
 
-## 来源和适用边界
+- 15,998 features × 1,000 cells；
+- `RNA`、`spliced`、`unspliced` assays；
+- distributed object 中没有 reduction/image；
+- metadata 含 `CellType`、`SubCellType`、cell-cycle scores/phase；
+- `CellType`：Ductal 253、Endocrine 355、Ngn3-high-EP 169、Ngn3-low-EP 67、Pre-endocrine 156。
 
-- `pancreas_sub` 来自通过 scVelo 分发的小鼠胰腺内分泌发生数据。
-- `panc8_sub` 汇总了 SeuratData 分发的八个人胰岛数据来源。
-- `pbmcmultiome_sub` 是 SeuratData 分发的真实 PBMC 配对 RNA/ATAC 子集。
-- `visium_human_pancreas_sub` 来自 GSE254829 的 PanIN 样本 GSM8058244。
-- `visium_mouse_brain_slices_sub` 来自 10x Genomics 的两个矢状位前部小鼠脑切片。
+```r
+data(pancreas_sub, package = "scop")
+dataset_audit(pancreas_sub)
+table(pancreas_sub$CellType)
+table(pancreas_sub$SubCellType, useNA = "ifany")
+stopifnot(all(c("RNA", "spliced", "unspliced") %in% Assays(pancreas_sub)))
+```
 
-这些是教程和回归测试数据。成功重跑能验证流程，不能把它们变成新的独立队列。
+**适合：**`FeatureStatPlot()`、cell filtering、doublet path、`JoinLayers()`、multi-resolution clustering、`ClusterTreePlot()`、`RunDimsEstimate()`、`CellDimPlot()` 与 PAGA/velocity prerequisites。
 
-## 许可与再分发核对
+**不适合：**治疗或疾病推断。全部 cells 的 `orig.ident` 都是 `SeuratProject`，不是 replicated sample field；reduced subset 不能重建完整 cohort。
 
-安装包帮助页把 `visium_mouse_brain_slices_sub` 标记为来自 10x/SeuratData、采用 CC BY 4.0。其他子集的帮助页给出了科学来源，但没有写明数据许可证，因此本站只记录来源，不声称未经核实的再分发权；重新分发源矩阵前必须核对原研究/数据库条款。公开 10x H5 由指定样本网址下载，不提交到本站仓库。
+## 4 · `panc8_sub`：八个胰岛 dataset sources
 
-机器可读的依据见[数据集清单](../evidence/real-data/dataset-catalog.csv)和[运行时清单](../evidence/real-data/runtime.json)。
+- 12,940 features × 1,600 cells；
+- 每个 `dataset` 200 cells：`celseq`、`celseq2`、`fluidigmc1`、`indrop1`–`indrop4`、`smartseq2`；
+- `tech` 包含 celseq、celseq2、fluidigmc1、indrop、smartseq2；
+- cell label 字段是小写 `celltype`；
+- `orig.ident` 有多个来源 ID，但 integration 使用 `dataset` 作为技术来源。
+
+```r
+data(panc8_sub, package = "scop")
+dataset_audit(panc8_sub)
+table(panc8_sub$dataset)
+table(panc8_sub$tech)
+table(panc8_sub$celltype, panc8_sub$dataset)
+```
+
+**适合：**跨 technical source 的 `SCTransform()` + `Harmony_integrate()`、pre/post mixing、biology preservation，以及已执行的 alpha/beta technical-source pseudobulk。
+
+**不适合：**声称有八个 biological replicates。`dataset` 是技术来源；beta/alpha 案例验证代码与已知 cell-type programme，不是 population/disease/treatment effect。
+
+## 5 · `pbmcmultiome_sub`：配对 RNA/ATAC PBMC
+
+- 21,074 features × 500 cells；
+- `RNA` 与 `peaks` assays；
+- metadata 含 RNA/ATAC count/feature、`CellType`、`SubCellType`；
+- B 84、CD4 T 84、CD8 T 83、DC 83、Mono 83、NK 83；
+- 无预存 reduction，evidence builder 在 annotation evaluation 前进行 RNA preprocessing。
+
+```r
+data(pbmcmultiome_sub, package = "scop")
+dataset_audit(pbmcmultiome_sub)
+table(pbmcmultiome_sub$CellType)
+summary(pbmcmultiome_sub[c("nCount_RNA", "nFeature_RNA", "nCount_ATAC", "nFeature_ATAC")])
+class(pbmcmultiome_sub[["peaks"]])
+```
+
+**适合：**canonical marker programmes、SCOP `GroupHeatmap()`、within-object held-out RNA transfer、`RunCellTypist()`，以及判断 multiome/ChromatinAssay 的 `RunLabelTransfer()`。
+
+**不适合：**证明 classifier 对独立 cohort 泛化。500-cell balanced subset 比临床 query 简单；RNA 成功也不证明 ATAC fragments、genome annotation、TSS、LSI 或 WNN 已验证。
+
+## 6 · `visium_human_pancreas_sub`：一个 human PanIN section
+
+- 5,000 features × 1,986 spots；
+- `Spatial` assay 与 image `slice1`；
+- 含 `x/y`、`sample_id`、`geo_accession`、`patient_sample`、`panin_grade`；
+- 所有 spots 的 `sample_id` 为 `GSM8058244`；
+- 含 `coda_label`、`coda_score` 和 tissue-component scores。
+
+```r
+data(visium_human_pancreas_sub, package = "scop")
+dataset_audit(visium_human_pancreas_sub)
+table(visium_human_pancreas_sub$sample_id)
+table(visium_human_pancreas_sub$coda_label, useNA = "ifany")
+summary(visium_human_pancreas_sub[c("x", "y", "nCount_Spatial", "nFeature_Spatial")])
+```
+
+**适合：**`RunSpotQC()`、`SpatialSpotPlot()`、spatial variable features、network、neighbourhood，以及 RCTD/spatial communication 设计。
+
+**不适合：**patient-level PanIN inference；它只有一个 accession/section。Spots 是混合物，`coda_label` 是 spot-domain label，不是直接 cell identity。
+
+## 7 · `visium_mouse_brain_slices_sub`：两个 spatial images
+
+- 4,000 features × 2,000 spots；
+- slice 1 / `anterior1` 1,000 spots，slice 2 / `anterior2` 1,000 spots；
+- metadata 含 `slice`、`region`、`sample`、`x`、`y`；
+- 两个都是 sagittal anterior 教学切片。
+
+```r
+data(visium_mouse_brain_slices_sub, package = "scop")
+dataset_audit(visium_mouse_brain_slices_sub)
+table(visium_mouse_brain_slices_sub$slice)
+table(visium_mouse_brain_slices_sub$sample)
+Images(visium_mouse_brain_slices_sub)
+```
+
+**适合：**逐 slice 审计 coordinate ranges、counts、image keys；使用 `SpatialSpotPlot()`；决定是否适合 `RunSpatialIntegration()`。
+
+**不适合：**把两个 images 当作独立 animals 或 conditions。`sample` 只标识 slice/image，没有 treatment contrast。
+
+## 8 · 官方 10x PBMC 1k v3 H5
+
+这是 evidence build 下载的唯一 source file，不随 SCOP 提供，也不提交进仓库。
+
+```r
+url <- paste0(
+  "https://cf.10xgenomics.com/samples/cell-exp/3.0.0/",
+  "pbmc_1k_v3/pbmc_1k_v3_filtered_feature_bc_matrix.h5"
+)
+dest <- "artifacts/real-data/input/pbmc_1k_v3_filtered_feature_bc_matrix.h5"
+download.file(url, dest, mode = "wb")
+raw <- Read10X_h5(dest)
+counts <- if (is.list(raw)) raw[["Gene Expression"]] else raw
+c(features = nrow(counts), cells = ncol(counts), total_umis = sum(counts))
+```
+
+Evidence 验证 33,538 features、1,222 cells、9,235,144 UMIs 和完整 SHA-256，然后重建三件套与 RDS，并检查精确 structural invariants。
+
+## 9 · Provenance 与 redistribution 边界
+
+Installed SCOP help 将这些对象来源分别指向 scVelo 的 mouse pancreas、SeuratData panc8、SeuratData PBMC multiome、GSE254829/GSM8058244，以及 10x/SeuratData mouse brain。
+
+Mouse-brain help 明确为 CC BY 4.0。其他 reduced objects 的 help 给出 scientific source，但没有写 dataset licence。因此本站引用 provenance，但不虚构 redistribution licence。重新发布 matrix 前必须检查原 study/repository 条款并保存证据。
+
+## 10 · 按问题选择数据
+
+| 要学习 | 数据 | 理由 | 主要限制 |
+|---|---|---|---|
+| raw-file import | PBMC 1k H5 | public source + checksum | 没有 SCOP-bundled downstream truth |
+| 单对象构建 | `pancreas_sub` | counts + spliced/unspliced + known classes | 无 biological replication |
+| cross-source integration | `panc8_sub` | 八个均衡 technical sources | source 不是 patient |
+| annotation choices | `pbmcmultiome_sub` | labels + RNA/peaks | 小型 balanced subset |
+| spot-level spatial | human pancreas | image、coordinates、domains | 单一 section |
+| multi-slice decisions | mouse brain | 两个 image/slice keys | 无 treatment/animal replication |
+
+::: {.checkpoint}
+**检查点——dataset declaration**
+
+保存 package/source version、object name、checksum/manifest hash、dimensions、assays/layers、metadata dictionary、每个 sample/source field 的角色、已有 preprocessing、教学目的、禁止的 inference，以及 licence/redistribution evidence。
+:::
+
+::: {.exercise}
+## 练习
+
+选择 annotation、integration、trajectory、composition 或 spatial neighbourhood 中一个问题，再选择一个 dataset。写出所需 assay、被当作 sample 的字段、是否 biologically replicated、一个有效结果和一个禁止结论。若没有数据支持所需单位，正确答案是“none”。
+:::
+
+机器可读来源为 [dataset catalog](../evidence/real-data/dataset-catalog.csv) 与 [runtime manifest](../evidence/real-data/runtime.json)。
+
+::: {.boundary}
+这些是 reduced teaching/regression-test datasets。复现图片只验证命名 workflow 在命名 subset 上可运行，不重建 full source study、不提供 independent cohort，也不授权新生物学结论。
+:::

@@ -1,56 +1,189 @@
 ---
-title: "复现本站真实结果"
-description: "SCOP Learn 的精确运行时、seed、H5 哈希、检查点、证据清单、结果图和重建命令。"
+title: "复现本站发布的真实证据"
+description: "完整记录 runtime、inputs、checksums、SCOP 原生图片 provenance、manifests、checkpoints、重建命令与 verification gates。"
 ---
 
-## 已审计运行时
+网站是 evidence chain 的 rendered view：source/bundled object 生成 checkpoint 与完整结果；SCOP 生成 published analysis plot；component manifests 记录 execution state/hash；top-level manifest 将所有 committed evidence 绑定在一起。
 
-- R 4.5.1
-- SCOP 0.8.9
-- Seurat 5.5.0
-- seed `20260807`
-- SCOP namespace 导出函数 314 个
+::: {.learning-objectives}
+## 学习目标
 
-包版本与可选后端状态见 [runtime.json](../evidence/real-data/runtime.json)，完整 session 输出见 [session-info.txt](../evidence/real-data/session-info.txt)。
+你将学会：
 
-## 一次性重建
+1. 从命名 inputs 重建全部 committed real-data evidence；
+2. 验证 component/figure hashes，而不是只看文件名；
+3. 区分 deterministic、environment-dependent 与 unavailable backends；
+4. 确认每张 published PNG 来自 exported SCOP plotter；
+5. 将 evidence-chain pattern 用于自己的研究。
+:::
 
-在仓库根目录：
+## 1 · Audited runtime
+
+| Component | Published value |
+|---|---|
+| R | 4.5.1 |
+| SCOP | 0.8.9 |
+| Seurat | 5.5.0 |
+| seed | `20260807` |
+| SCOP exports | 314 |
+
+[runtime manifest](../evidence/real-data/runtime.json) 还记录 backend：CellTypist、edgeR、harmony、clustree 已安装并执行；SingleR/celldex、spacexr、zellkonverter、loomR 缺失，对应路径为 `not executed`。
+
+Dependency built under nearby R patch version 的 warning 不自动使结果无效，但必须进入 session record；若出现 numerical/ABI failure 应调查。
+
+## 2 · Source input 与 checksum
+
+五个对象来自 installed SCOP。外部 raw-format case 使用官方 10x PBMC 1k v3 filtered H5：
+
+```text
+SHA-256  8191f576550c1b449d03441b9eb098ee9f73fa82513d171ba87d31d551e3ffda
+features 33,538
+cells    1,222
+UMIs     9,235,144
+```
 
 ```bash
 mkdir -p artifacts/real-data/input
 curl -L --fail \
   -o artifacts/real-data/input/pbmc_1k_v3_filtered_feature_bc_matrix.h5 \
   https://cf.10xgenomics.com/samples/cell-exp/3.0.0/pbmc_1k_v3/pbmc_1k_v3_filtered_feature_bc_matrix.h5
+shasum -a 256 artifacts/real-data/input/pbmc_1k_v3_filtered_feature_bc_matrix.h5
+```
 
+Checksum 不一致必须停止，不能静默修改 expected value。先判断 source 是否变化、下载是否不完整或文件是否错误。
+
+::: {.input-contract}
+**Rebuild contract**
+
+- repository 位于命名 commit；
+- H5 checksum 匹配；
+- R/SCOP/Seurat versions 已记录；
+- ignored `artifacts/` 可写；
+- 有足够 memory/disk；
+- 解释 module failure 前先记录 backend status。
+:::
+
+## 3 · 运行 evidence builder
+
+```bash
 Rscript scripts/build-real-evidence.R
+```
+
+七个阶段：runtime/backend inventory；H5 → 三件套 → RDS round-trip；`pancreas_sub` construction；`panc8_sub` SCT+Harmony；PBMC annotation + panc8 pseudobulk；human/mouse Visium；最后生成 hashes、figure provenance、critical assertions 与 session record。
+
+成功时输出 7 个 component manifests 和 11 张 real-data figures；任一 critical assertion 失败都会停止。
+
+## 4 · 重建内容
+
+**Committed evidence：**runtime/input/single/cross-source/annotation/advanced/spatial/manifest JSON、dataset catalog、pseudobulk CSV、session info，以及 `assets/figures/real-data/` 下 11 张 PNG。
+
+**Ignored but hashed checkpoints：**大型 RDS 写入 `artifacts/real-data/checkpoints/`。它们不进 Git，但 path、bytes、SHA-256 进入 component manifest，可证明哪个对象生成结果。
+
+## 5 · 验证 top-level manifest
+
+每个 figure record 必须含 `path`、`sha256`、`bytes`、`plot_function`、`dataset`、`source_checkpoint`。
+
+```r
+manifest <- jsonlite::read_json(
+  "evidence/real-data/manifest.json",
+  simplifyVector = TRUE
+)
+stopifnot(length(manifest$components) == 7)
+stopifnot(length(manifest$figures) == 11)
+stopifnot(all(unlist(manifest$critical_assertions)))
+
+plot_functions <- vapply(manifest$figures, `[[`, character(1), "plot_function")
+stopifnot(all(vapply(strsplit(plot_functions, " + ", fixed = TRUE), function(x) {
+  all(startsWith(x, "scop::"))
+}, logical(1))))
+```
+
+```r
+sha256 <- function(path) digest::digest(path, algo = "sha256", file = TRUE)
+for (item in manifest$components) {
+  stopifnot(file.exists(item$path), identical(sha256(item$path), item$sha256))
+}
+for (item in manifest$figures) {
+  stopifnot(file.exists(item$path), identical(sha256(item$path), item$sha256))
+}
+```
+
+若本机没有 `digest`，可用 `openssl::sha256(file(path))` 或 `shasum -a 256`。不能把 hash check 降级为“文件存在”。
+
+## 6 · Published figure provenance
+
+| Figure family | SCOP plotter |
+|---|---|
+| single QC | `FeatureStatPlot()` |
+| cluster stability | `ClusterTreePlot()` |
+| dimension evidence | `DimsEstimatePlot()` |
+| embedding | `CellDimPlot()` |
+| annotation markers | `GroupHeatmap()` |
+| pseudobulk DEG | `VolcanoPlot()` |
+| spatial domains/features | `SpatialSpotPlot()` + `SpatialVariableFeaturePlot()` |
+| spatial graph | `SpatialNetworkPlot()` |
+| spatial neighbourhood | `SpatialNeighborhoodPlot()` |
+
+SCOP 不是统计引擎时可以使用 external model，例如 edgeR 生成有效 pseudobulk table；但 displayed plot 与 function provenance 必须明确。
+
+## 7 · Critical assertions 与实际 outcomes
+
+必须证明 H5/三件套 dimensions+UMIs 一致、H5/RDS dimensions 一致、single case 保留 979 cells、cross-source 有真实 Harmony reduction、pseudobulk 有 16 pseudo-samples/5,227 genes/527 significant、至少 20 Moran features、所有图用 SCOP plotters、synthetic 不是 primary evidence。
+
+这些是 locked runtime/data 的 regression expectations，不是通用 biological thresholds。
+
+## 8 · 渲染双语网站
+
+```bash
 quarto render
 ```
 
-预期 H5 SHA-256：
+GitHub quality workflow 使用 Quarto 1.10.18，检查 EN/ZH route parity、metadata/canonical/alternates、local path/token leakage、internal links/anchors/alt text、manifest hashes/execution states、external HTTPS links 和中英文首页 accessibility。
 
-```text
-8191f576550c1b449d03441b9eb098ee9f73fa82513d171ba87d31d551e3ffda
-```
+## 9 · 哪些应 exact，哪些依赖环境
 
-## 证据链
+| Component | 预期 |
+|---|---|
+| source checksum、dimensions、total counts | exact |
+| locked output hashes | exact |
+| filtering 与 retained identities | locked runtime 下 exact |
+| edgeR table | locked versions 下 exact/near-exact |
+| clustering/UMAP | seed-controlled，但平台可能略变 |
+| CellTypist | 依赖 Python env 与 model file |
+| motifs/pathways/references | 必须另行 version |
+| H5AD/Loom/RCTD | 本 runtime 未执行，无 output claim |
 
-[顶层 manifest](../evidence/real-data/manifest.json)对 7 个组件清单和所有真实结果图进行哈希，并断言：H5→三件套与 H5→RDS 往返一致；单样本保留细胞 >900；跨来源对象确实产生 Harmony reduction；pseudobulk 结果非空；Moran 排名特征至少 20 个；主证据没有使用合成数据。
+Seed 不能冻结 external models、databases、C++ math libraries 或 package resolver。
 
-大型 RDS 检查点在本地 `artifacts/` 下重建，故意不提交到 Git；组件清单保存其 SHA-256 与字节数。
+## 10 · Clean-room verification
 
-## 哪些可固定，哪些依赖外部环境
+新目录 clone；核对 commit/H5 hash；创建 clean R environment；安装 locked versions；重建一次；比较 manifests/numeric invariants，并实际查看每张 PNG；渲染；检查 desktop/mobile；保存 build log 和 manifest。
 
-R seed 固定本站使用的随机步骤，但平台与依赖版本仍可能造成浮点或 UMAP 坐标差异。CellTypist 还依赖 Python 环境和 `Immune_All_Low.pkl`；证据清单记录了实际模型和结果摘要。
+新 build 通过前不要删除 previous known-good manifest。Rollback 必须有 known-good commit/evidence bundle。
 
-## 证据文件
+::: {.checkpoint}
+**复现检查点**
 
-- [输入格式](../evidence/real-data/input-formats.json)
-- [单样本](../evidence/real-data/single-sample.json)
-- [跨来源](../evidence/real-data/cross-source.json)
-- [注释](../evidence/real-data/annotation.json)
-- [高级分析](../evidence/real-data/advanced.json)
-- [空间](../evidence/real-data/spatial.json)
-- [完整构建脚本](../scripts/build-real-evidence.R)
+Input hash 匹配、critical assertions 全 true、component/figure hashes 有效、11 张图均有 SCOP-native provenance、双语网站可渲染，而且查看了实际 exported images，才接受 rebuild。
+:::
 
-旧合成案例仅保留为代码级 smoke test，不再作为教程生物学证据。
+## 常见失败
+
+| 现象 | 原因 | 处理 |
+|---|---|---|
+| H5 hash mismatch | wrong/partial/updated file | 停止并解决 source identity |
+| checkpoint hash 变但 numeric assertions 通过 | serialization/platform | 比较 versions、invariants、tables 并记录 |
+| UMAP 轻微变化 | numerical dependency | 比较 neighbour metrics/biology |
+| CellTypist labels 变化 | model/env drift | 锁定 model/version 并复审 |
+| manifest `not executed` | backend 缺失 | 明确安装验证或保留 honest boundary |
+| figure 有文件但无 provenance | unmanaged/manual plot | 通过 registered SCOP plotter 重建 |
+
+::: {.exercise}
+## 练习
+
+为一张自己的 figure 建 mini-manifest：input checksum、checkpoint hash、result-table hash、plot function/arguments、dataset design、runtime versions、figure hash、allowed claim。删除 figure 后证明可从记录 checkpoint 重建。
+:::
+
+::: {.boundary}
+Reproducibility 证明定义好的计算可重建，不证明 design unbiased、cohort representative、labels true 或 interpretation causal。
+:::

@@ -1,48 +1,239 @@
 ---
 title: "Dataset atlas"
-description: "The real datasets used in SCOP Learn, their provenance, assays, sizes, and teaching roles."
+description: "A field-level atlas of every real dataset used by SCOP Learn: provenance, dimensions, assays, metadata, teaching role, limitations, loading code, and licence boundary."
 ---
 
-The main curriculum uses five real datasets bundled with SCOP plus one public 10x H5. Synthetic data is not primary teaching evidence.
+SCOP Learn uses real data for every primary result. Five reduced teaching objects are bundled with SCOP 0.8.9; one official 10x H5 is downloaded during evidence reconstruction. This chapter tells you what each object can—and cannot—teach before you choose a workflow.
 
-| Dataset | Species | Shape | Assays / modality | Role |
+::: {.learning-objectives}
+## Learning outcomes
+
+You will learn to:
+
+1. load and audit every bundled teaching object;
+2. distinguish technical source, biological sample, patient, cell type, and spatial slice fields;
+3. select a dataset whose assays and metadata can answer the lesson question;
+4. recognize reduced/preprocessed teaching data that cannot substitute for a raw cohort;
+5. record provenance and redistribution status without inventing a licence.
+:::
+
+## 1 · Complete inventory
+
+| Dataset | Species | Features × observations | Assays / modality | Primary teaching role |
 |---|---|---:|---|---|
-| `pancreas_sub` | mouse | 15,998 × 1,000 | RNA, spliced, unspliced | single-sample QC, clustering, trajectory-ready object |
-| `panc8_sub` | human | 12,940 × 1,600 | RNA; 8 dataset sources | cross-source integration and pseudobulk demonstration |
-| `pbmcmultiome_sub` | human | 21,074 × 500 | RNA + peaks | manual markers, label transfer, CellTypist, multiome choices |
-| `visium_human_pancreas_sub` | human | 5,000 × 1,986 | Spatial; one tissue image | PanIN spot QC, Moran features, network and neighbourhood analysis |
-| `visium_mouse_brain_slices_sub` | mouse | 4,000 × 2,000 | Spatial; two slices | multi-slice audit and integration decisions |
-| 10x PBMC 1k v3 H5 | human | 33,538 × 1,222 | filtered gene expression matrix | raw-file reading and round-trip validation |
+| `pancreas_sub` | mouse | 15,998 × 1,000 cells | RNA, spliced, unspliced | single-sample QC, clustering, dimension choice, trajectory prerequisites |
+| `panc8_sub` | human | 12,940 × 1,600 cells | RNA; eight dataset sources | cross-source integration and technical-source pseudobulk demonstration |
+| `pbmcmultiome_sub` | human | 21,074 × 500 cells | RNA + peaks | marker programmes, reference transfer, CellTypist, multiome boundaries |
+| `visium_human_pancreas_sub` | human | 5,000 × 1,986 spots | Spatial; image `slice1` | spot QC, Moran features, network, neighbourhood, deconvolution decision |
+| `visium_mouse_brain_slices_sub` | mouse | 4,000 × 2,000 spots | Spatial; images `anterior1`, `anterior2` | multi-slice audit and spatial integration decisions |
+| PBMC 1k v3 H5 | human | 33,538 × 1,222 cells | filtered 10x gene-expression counts | H5/three-file/RDS import round-trip |
 
-## Load and audit bundled data
+::: {.input-contract}
+**Dataset-selection contract**
+
+Before using a teaching dataset, state: the biological question, assay required, independent unit required, metadata field that represents that unit, raw/preprocessed status, species, genome/identifier assumptions, and whether the object has enough replication for the intended conclusion.
+:::
+
+## 2 · One audit function for bundled objects
 
 ```r
 library(scop)
 library(Seurat)
 
-data(pancreas_sub, package = "scop")
-dim(pancreas_sub)
-Assays(pancreas_sub)
-colnames(pancreas_sub[[]])
-table(pancreas_sub$CellType)
+dataset_audit <- function(x) {
+  list(
+    dimensions = dim(x),
+    assays = Assays(x),
+    default_assay = DefaultAssay(x),
+    layers = lapply(Assays(x), function(a) Layers(x[[a]])),
+    metadata = colnames(x[[]]),
+    reductions = Reductions(x),
+    images = Images(x),
+    cell_names_unique = !anyDuplicated(colnames(x)),
+    feature_names_unique = !anyDuplicated(rownames(x))
+  )
+}
 ```
 
-Run the same audit for every object. The printed metadata columns define which questions are answerable. For example, `panc8_sub$dataset` is a technical-source label; it is not a patient identifier.
+Load package data explicitly so that your script does not depend on a previous interactive session:
 
-## Provenance and appropriate use
+```r
+data(pancreas_sub, package = "scop")
+dataset_audit(pancreas_sub)
+```
 
-- `pancreas_sub` is derived from mouse pancreatic endocrinogenesis data distributed through scVelo.
-- `panc8_sub` combines eight human pancreatic-islet dataset sources distributed through SeuratData.
-- `pbmcmultiome_sub` is a real paired PBMC RNA/ATAC subset distributed through SeuratData.
-- `visium_human_pancreas_sub` is derived from PanIN sample GSM8058244 in GSE254829.
-- `visium_mouse_brain_slices_sub` is derived from two 10x Genomics sagittal anterior mouse-brain slices.
+## 3 · `pancreas_sub`: one real developmental pancreas subset
 
-These are teaching and regression-test datasets. Re-running them validates a workflow; it does not create an independent cohort or a new publication claim.
+**Structure**
 
-## Licence and redistribution check
+- 15,998 features × 1,000 cells;
+- assays: `RNA`, `spliced`, `unspliced`;
+- no stored reduction or image in the distributed object;
+- broad metadata: `CellType`, `SubCellType`, cell-cycle scores and phase;
+- broad `CellType` counts: Ductal 253, Endocrine 355, Ngn3-high-EP 169, Ngn3-low-EP 67, Pre-endocrine 156.
 
-The installed SCOP help identifies `visium_mouse_brain_slices_sub` as derived from 10x/SeuratData material under CC BY 4.0. The installed help for the other subsets names their scientific sources but does not state a dataset licence. This site therefore cites their provenance but does **not** assert an unverified redistribution licence; users must check the original study/repository terms before redistributing source matrices. The public 10x H5 is downloaded from the named 10x sample URL and is not committed here.
+```r
+data(pancreas_sub, package = "scop")
 
-## Machine-readable inventory
+dataset_audit(pancreas_sub)
+table(pancreas_sub$CellType)
+table(pancreas_sub$SubCellType, useNA = "ifany")
 
-The generated [dataset catalog](evidence/real-data/dataset-catalog.csv) and [runtime manifest](evidence/real-data/runtime.json) are the audit sources for the table above.
+stopifnot(all(c("RNA", "spliced", "unspliced") %in% Assays(pancreas_sub)))
+```
+
+**Use it for:** SCOP `FeatureStatPlot()`, cell filtering, doublet-path teaching, `JoinLayers()`, multi-resolution clustering, `ClusterTreePlot()`, `RunDimsEstimate()`, `CellDimPlot()`, and the prerequisites of PAGA/velocity-aware work.
+
+**Do not use it for:** treatment or disease inference. `orig.ident` is `SeuratProject` for all 1,000 cells and is not a replicated sample field. The object is a reduced teaching subset and cannot reconstruct the full source cohort.
+
+## 4 · `panc8_sub`: eight pancreatic dataset sources
+
+**Structure**
+
+- 12,940 features × 1,600 cells;
+- RNA assay;
+- eight `dataset` levels with 200 cells each: `celseq`, `celseq2`, `fluidigmc1`, `indrop1`–`indrop4`, `smartseq2`;
+- technology field `tech`: celseq, celseq2, fluidigmc1, indrop, smartseq2;
+- cell label field is lower-case `celltype`;
+- `orig.ident` contains many donor/sample-like source identifiers, but the teaching integration uses `dataset` as the technical-source field.
+
+```r
+data(panc8_sub, package = "scop")
+
+dataset_audit(panc8_sub)
+table(panc8_sub$dataset)
+table(panc8_sub$tech)
+table(panc8_sub$celltype, panc8_sub$dataset)
+```
+
+**Use it for:** `SCTransform()` + `Harmony_integrate()` across technical sources, pre/post mixing diagnostics, biology-preservation checks, and an executed paired technical-source alpha/beta pseudobulk demonstration.
+
+**Do not use it for:** claiming eight biological replicates. The evidence manifest states that `dataset` labels are technical sources. The beta/alpha demonstration proves an executable model path and known cell-type programme, not a population, disease, or treatment effect.
+
+## 5 · `pbmcmultiome_sub`: paired RNA and ATAC PBMCs
+
+**Structure**
+
+- 21,074 features × 500 cells;
+- assays `RNA` and `peaks`;
+- metadata includes `nCount_RNA`, `nFeature_RNA`, `nCount_ATAC`, `nFeature_ATAC`, `CellType`, and `SubCellType`;
+- broad balanced classes: B 84, CD4 T 84, CD8 T 83, DC 83, Mono 83, NK 83;
+- no distributed UMAP/reduction, so the evidence builder calculates RNA preprocessing before annotation evaluation.
+
+```r
+data(pbmcmultiome_sub, package = "scop")
+
+dataset_audit(pbmcmultiome_sub)
+table(pbmcmultiome_sub$CellType)
+summary(pbmcmultiome_sub[c("nCount_RNA", "nFeature_RNA", "nCount_ATAC", "nFeature_ATAC")])
+class(pbmcmultiome_sub[["peaks"]])
+```
+
+**Use it for:** canonical marker programmes, SCOP `GroupHeatmap()`, within-object held-out RNA reference transfer, `RunCellTypist()`, and deciding when SCOP `RunLabelTransfer()` is appropriate for a multiome/ChromatinAssay path.
+
+**Do not use it for:** proving classifier generalization to another cohort. A balanced 500-cell teaching subset is easier than an independent clinical query. RNA success also does not prove that fragments, genome annotation, TSS enrichment, LSI, or WNN were validated for the ATAC assay.
+
+## 6 · `visium_human_pancreas_sub`: one human PanIN tissue section
+
+**Structure**
+
+- 5,000 features × 1,986 spots;
+- `Spatial` assay and image `slice1`;
+- explicit `x`, `y`, `sample_id`, `geo_accession`, `patient_sample`, and `panin_grade` fields;
+- `sample_id` is `GSM8058244` for all spots;
+- CoDA-derived fields include `coda_label`, `coda_score`, and tissue-component scores.
+
+```r
+data(visium_human_pancreas_sub, package = "scop")
+
+dataset_audit(visium_human_pancreas_sub)
+table(visium_human_pancreas_sub$sample_id)
+table(visium_human_pancreas_sub$coda_label, useNA = "ifany")
+summary(visium_human_pancreas_sub[c("x", "y", "nCount_Spatial", "nFeature_Spatial")])
+```
+
+**Use it for:** `RunSpotQC()`, `SpatialSpotPlot()`, `RunSpatialVariableFeatures()` / `SpatialVariableFeaturePlot()`, `RunSpatialNetwork()` / `SpatialNetworkPlot()`, `RunSpatialNeighborhood()` / `SpatialNeighborhoodPlot()`, and the design prerequisites for RCTD or spatial communication.
+
+**Do not use it for:** patient-level PanIN inference; it is one accession/section. Spots are mixtures, and `coda_label` is a spot-domain label rather than direct single-cell identity.
+
+## 7 · `visium_mouse_brain_slices_sub`: two spatial images
+
+**Structure**
+
+- 4,000 features × 2,000 spots;
+- 1,000 spots in slice 1 / image `anterior1` and 1,000 in slice 2 / image `anterior2`;
+- metadata includes `slice`, `region`, `sample`, `x`, and `y`;
+- both images are sagittal anterior teaching slices.
+
+```r
+data(visium_mouse_brain_slices_sub, package = "scop")
+
+dataset_audit(visium_mouse_brain_slices_sub)
+table(visium_mouse_brain_slices_sub$slice)
+table(visium_mouse_brain_slices_sub$sample)
+Images(visium_mouse_brain_slices_sub)
+```
+
+**Use it for:** proving that coordinate ranges, counts, and image keys must be audited per slice; visualizing each image with SCOP `SpatialSpotPlot()`; deciding whether `RunSpatialIntegration()` is justified.
+
+**Do not use it for:** treating spots in two images as independent animals or conditions. The `sample` values identify slices/images; no biological treatment contrast is encoded.
+
+## 8 · Official 10x PBMC 1k v3 H5
+
+This is the only source file downloaded during the executed evidence build. It is not bundled inside SCOP or committed to the repository.
+
+```r
+url <- paste0(
+  "https://cf.10xgenomics.com/samples/cell-exp/3.0.0/",
+  "pbmc_1k_v3/pbmc_1k_v3_filtered_feature_bc_matrix.h5"
+)
+dest <- "artifacts/real-data/input/pbmc_1k_v3_filtered_feature_bc_matrix.h5"
+download.file(url, dest, mode = "wb")
+
+raw <- Read10X_h5(dest)
+counts <- if (is.list(raw)) raw[["Gene Expression"]] else raw
+c(features = nrow(counts), cells = ncol(counts), total_umis = sum(counts))
+```
+
+The evidence builder validates 33,538 features, 1,222 cells, 9,235,144 total UMIs, and the full SHA-256. It then reconstructs the 10x three-file form and an RDS round-trip and checks exact structural invariants.
+
+## 9 · Provenance and redistribution boundary
+
+The installed SCOP documentation identifies:
+
+- `pancreas_sub` as derived from mouse pancreatic endocrinogenesis data distributed through scVelo;
+- `panc8_sub` as a subset of the SeuratData panc8 collection;
+- `pbmcmultiome_sub` as a subset of SeuratData PBMC multiome material;
+- `visium_human_pancreas_sub` as derived from GSE254829 / GSM8058244;
+- `visium_mouse_brain_slices_sub` as derived from 10x/SeuratData mouse brain material.
+
+The installed help explicitly identifies CC BY 4.0 for the mouse-brain teaching data. The help for the other reduced objects names sources but does not state a dataset licence. Therefore this site cites provenance but does **not** invent a redistribution licence. Before republishing matrices, inspect the original repository/study terms and record the evidence.
+
+## 10 · Choose the dataset from the question
+
+| If you want to learn… | Use | Why | Main limitation |
+|---|---|---|---|
+| raw-file import | PBMC 1k H5 | immutable public source and checksum | no SCOP-bundled downstream truth |
+| one-object construction | `pancreas_sub` | counts plus spliced/unspliced and known developmental classes | no biological sample replication |
+| cross-source integration | `panc8_sub` | eight balanced technical sources | source is not patient |
+| annotation choices | `pbmcmultiome_sub` | broad truth labels plus RNA/peaks | small balanced subset |
+| spot-level spatial workflow | human pancreas | real image, coordinates, domain scores | one tissue section |
+| multi-slice decisions | mouse brain | two image/slice keys | no treatment or animal replication |
+
+::: {.checkpoint}
+**Checkpoint — dataset declaration**
+
+Save the package/source version, object name, checksum or manifest hash, dimensions, assays/layers, metadata dictionary, role of every sample/source field, preprocessing already present, teaching purpose, unavailable inference, and licence/redistribution evidence.
+:::
+
+::: {.exercise}
+## Practice task
+
+Pick one research question—annotation, integration, trajectory, composition, or spatial neighbourhood—and select one dataset. Write the required assay, the field you would treat as sample, whether it is biologically replicated, one valid result, and one prohibited conclusion. If no dataset supports the required unit, your correct answer is “none.”
+:::
+
+The generated [dataset catalog](evidence/real-data/dataset-catalog.csv) and [runtime manifest](evidence/real-data/runtime.json) are the machine-readable sources for this atlas.
+
+::: {.boundary}
+These are reduced teaching and regression-test datasets. Reproducing the figures validates the named workflow on the named subset. It does not recreate the full source study, provide an independent cohort, or authorize a new biological claim.
+:::

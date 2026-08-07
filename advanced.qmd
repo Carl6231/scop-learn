@@ -1,25 +1,158 @@
 ---
 title: "Advanced analysis by research question"
-description: "SCOP workflows for differential expression, enrichment, composition, trajectory, communication, regulation, metabolism, and malignancy."
+description: "A detailed, claim-bounded SCOP guide to pseudobulk differential expression, enrichment, composition, trajectory, communication, regulation, metabolism, malignancy, and phenotype association."
 ---
 
-Advanced functions are not a checklist. Select a module because it answers a predefined question and because its assumptions match the data.
+Advanced analysis is not a menu of plots. Each module must begin with a biological question, an experimental unit, a required input, and a stopping rule. This chapter separates the **executed real-data path** from **extension templates whose optional backend or study design was not available**.
 
-## Differential expression and enrichment
+::: {.learning-objectives}
+## Learning outcomes
 
-For multi-sample studies, aggregate counts by `sample_id × cell_type`, then fit the condition at sample level. The executed demonstration uses 16 `dataset × celltype` pseudobulks from `panc8_sub` to contrast beta and alpha cells with dataset pairing.
+You will learn to:
 
-![Pseudobulk alpha versus beta volcano plot on real panc8 counts.](assets/figures/real-data/advanced-pseudobulk.png){fig-alt="Volcano plot shows edgeR pseudobulk genes differing between beta and alpha pancreatic cells across eight technical data sources."}
+1. distinguish cluster markers from sample-level differential expression;
+2. construct pseudobulk counts and display a valid result with SCOP `VolcanoPlot()`;
+3. choose over-representation analysis, GSEA, or composition testing from the question;
+4. select a trajectory method without turning an ordering into lineage proof;
+5. frame communication, SCENIC, metabolism, CNV, and Scissor as testable hypotheses;
+6. connect advanced modules into one paper story instead of a collection of unrelated figures.
+:::
 
-The real edgeR path tested **5,227 genes** and found **527** with FDR < 0.05 and absolute log2 fold change ≥ 1. This verifies strong cell-type signal; technical dataset sources are not patient replicates.
+## 1 · Lock the question and independent unit
+
+::: {.input-contract}
+**Input contract for study-level inference**
+
+- raw counts remain available;
+- `sample_id` identifies an independent biological specimen;
+- `condition` contains the prespecified contrast;
+- `cell_type` contains reviewed labels and uncertainty;
+- each condition has biological replication;
+- subject pairing, batch, sex, age, and other covariates are encoded before model fitting;
+- exploratory technical-source demonstrations are not described as patient-level inference.
+:::
+
+Use this decision table before calling a function:
+
+| Question | Unit that must replicate | Primary result | SCOP runner / plotter |
+|---|---|---|---|
+| Which genes change in one cell type? | biological sample | pseudobulk coefficient, uncertainty, FDR | external count model → `VolcanoPlot()` |
+| Which processes summarize a gene list? | inherited from DEG design | enriched terms | `RunEnrichment()` → `EnrichmentPlot()` |
+| Which pathways shift across the full ranking? | inherited from DEG design | normalized enrichment / FDR | `RunGSEA()` → `GSEAPlot()` |
+| Which cell populations change in abundance? | biological sample | log-fold difference / FDR | `RunPropeller()` or `RunProportionTest()` → `ProportionTestPlot()` |
+| Is a continuous transition plausible? | cells within an appropriate biological design | connectivity / pseudotime | `RunPAGA()`, `RunCytoTRACE()`, `RunSlingshot()` plus their plotters |
+| Which ligand–receptor hypotheses emerge? | preferably replicated samples | candidate sender–receiver edges | `RunCellChat()` → `CCCNetworkPlot()` / `CCCHeatmap()` |
+| Which regulatory programmes differ? | cells/samples with adequate gene coverage | regulon activity | `RunSCENIC()` → `SCENICPlot()` |
+| Which metabolic programmes differ? | cells/samples with adequate gene coverage | relative pathway score | `RunMetabolism()` → `MetabolismPlot()` |
+| Which cells show CNV-like expression? | tumour cells plus valid normal reference | expression-derived CNV pattern | `RunCNV()` → `CNVPlot()` |
+| Which single cells associate with a bulk phenotype? | matched bulk cohort with phenotype | Scissor+/Scissor− candidates | `RunScissor()` → `ScissorPlot()` |
+
+## 2 · Executed pseudobulk differential expression
+
+The real demonstration uses `panc8_sub`, aggregates raw counts by `dataset × celltype`, and compares beta with alpha cells while pairing on the eight technical dataset sources. This is useful for validating the count-model and SCOP plotting path. The sources are technologies/datasets, not patients.
 
 ```r
-# after a valid sample-level DEG table exists
-enrichment <- RunEnrichment(
+library(scop)
+library(Seurat)
+library(edgeR)
+
+data(panc8_sub, package = "scop")
+srt <- panc8_sub
+DefaultAssay(srt) <- "RNA"
+
+keep <- srt$celltype %in% c("alpha", "beta")
+counts <- LayerData(srt, assay = "RNA", layer = "counts")[, keep]
+meta <- srt[[]][keep, c("dataset", "celltype"), drop = FALSE]
+meta$pseudo_id <- paste(meta$dataset, meta$celltype, sep = "__")
+
+pseudobulk <- rowsum(
+  t(as.matrix(counts)),
+  group = meta$pseudo_id,
+  reorder = FALSE
+)
+pseudobulk <- t(pseudobulk)
+
+sample_table <- unique(meta[c("pseudo_id", "dataset", "celltype")])
+sample_table <- sample_table[match(colnames(pseudobulk), sample_table$pseudo_id), ]
+stopifnot(identical(colnames(pseudobulk), sample_table$pseudo_id))
+```
+
+For large studies, avoid `as.matrix()` and aggregate the sparse matrix with a sparse-aware method. It is expanded here only to make the grouping contract visible on the 1,600-cell teaching subset.
+
+```r
+y <- DGEList(pseudobulk)
+keep_gene <- filterByExpr(y, group = sample_table$celltype)
+y <- calcNormFactors(y[keep_gene, , keep.lib.sizes = FALSE])
+
+design <- model.matrix(~ dataset + celltype, data = sample_table)
+y <- estimateDisp(y, design)
+fit <- glmQLFit(y, design, robust = TRUE)
+test <- glmQLFTest(fit, coef = "celltypebeta")
+deg <- topTags(test, n = Inf)$table
+
+volcano_input <- transform(
+  deg,
+  feature = rownames(deg),
+  avg_log2FC = logFC,
+  p_val = PValue,
+  p_val_adj = FDR
+)
+```
+
+SCOP receives the valid result table and renders it:
+
+```r
+VolcanoPlot(
+  srt = srt,
+  res = volcano_input,
+  DE_threshold = "abs(avg_log2FC) >= 1 & p_val_adj < 0.05",
+  x_metric = "avg_log2FC",
+  y_metric = "p_val_adj",
+  nlabel = 10,
+  label.by = "p_val_adj",
+  verbose = FALSE
+)
+```
+
+![SCOP volcano plot for the executed beta-versus-alpha pseudobulk contrast.](assets/figures/real-data/advanced-pseudobulk.png){fig-alt="SCOP VolcanoPlot shows beta versus alpha pseudobulk differential genes from eight paired technical dataset sources."}
+
+::: {.scop-native}
+**SCOP-native figure provenance:** `scop::VolcanoPlot()` plotted an edgeR pseudobulk result derived from the real `panc8_sub` counts. The graphics device only saved the SCOP-returned plot.
+:::
+
+The run tested **5,227 genes** and found **527** at FDR < 0.05 and absolute log2 fold change ≥ 1. This confirms a strong beta-versus-alpha programme and an executable pipeline. It does **not** estimate disease or treatment effects because the eight sources are not independent patients.
+
+::: {.checkpoint}
+**Checkpoint 1 — differential model**
+
+Save the count aggregation rule, pseudobulk sample table, design matrix, contrast, retained genes, normalization factors, full result table, plot thresholds, session information, and a note stating the true experimental unit.
+:::
+
+## 3 · Enrichment: list or ranking?
+
+Use over-representation analysis when a prespecified significant list is meaningful. Use GSEA when the full directional ranking is meaningful. Never rank by adjusted P value alone; use a signed effect/statistic.
+
+```r
+significant_genes <- rownames(deg)[deg$FDR < 0.05 & abs(deg$logFC) >= 1]
+
+enriched <- RunEnrichment(
   geneID = significant_genes,
   species = "Homo_sapiens",
   db = "GO_BP"
 )
+
+EnrichmentPlot(
+  res = enriched,
+  db = "GO_BP",
+  plot_type = "dot",
+  padjustCutoff = 0.05,
+  topTerm = 10
+)
+```
+
+```r
+ranked_statistic <- setNames(deg$F, rownames(deg))
+ranked_statistic <- sort(ranked_statistic[is.finite(ranked_statistic)], decreasing = TRUE)
 
 gsea <- RunGSEA(
   geneID = names(ranked_statistic),
@@ -27,72 +160,290 @@ gsea <- RunGSEA(
   species = "Homo_sapiens",
   db = "GO_BP"
 )
+
+GSEAPlot(
+  res = gsea,
+  db = "GO_BP",
+  plot_type = "bar",
+  direction = "both",
+  padjustCutoff = 0.05
+)
 ```
 
-Interpret pathways as summaries of a gene statistic, not as direct measurements of pathway activity.
+Inspect identifier conversion, database version, background universe, term redundancy, leading-edge genes, and whether a pathway is driven by one very large gene family. Enrichment summarizes the supplied statistic; it does not measure pathway activity or causal mechanism.
 
-## Cell proportions
+## 4 · Cell-composition analysis
 
-Use `RunPropeller()` or `RunProportionTest()` when each condition has multiple independent samples:
+For replicated samples, build an explicit design table first:
 
 ```r
-prop <- RunPropeller(
+sample_design <- unique(srt[[]][c("sample_id", "condition", "patient_id", "batch")])
+stopifnot(!anyDuplicated(sample_design$sample_id))
+table(sample_design$condition)
+
+srt <- RunPropeller(
   srt,
   group.by = "cell_type",
   split.by = "condition",
-  sample.by = "sample_id"
+  sample.by = "sample_id",
+  comparison = c("treated", "control"),
+  n_bootstrap = 1000,
+  seed = 20260807
 )
 ```
 
-Do not invent pseudo-replication from cells when only one sample exists per condition.
-
-## Trajectory and dynamics {#trajectory-and-dynamics}
-
-Application: differentiation, activation, or recovery where a continuous process is biologically plausible.
+An alternative SCOP proportion engine is explicit about its method:
 
 ```r
-paga <- RunPAGA(srt, group.by = "cell_type")
-cytotrace <- RunCytoTRACE(srt)
+srt <- RunProportionTest(
+  srt,
+  group.by = "cell_type",
+  split.by = "condition",
+  comparison = c("treated", "control"),
+  sample.by = "sample_id",
+  proportion_method = "propeller",
+  FDR_threshold = 0.05,
+  seed = 20260807
+)
+
+ProportionTestPlot(
+  srt,
+  comparison = c("treated", "control"),
+  proportion_method = "propeller",
+  plot_type = "effect"
+)
 ```
 
-`pancreas_sub` also carries spliced/unspliced assays, making it suitable for a velocity-aware extension. A trajectory is an ordering model, not proof that one observed cell becomes another.
+Check absolute counts, denominators, missing populations, compositional dependence, and sensitivity to sample exclusion. If there is one sample per condition, stop: cells cannot manufacture biological replication.
 
-## Cell–cell communication
+## 5 · Trajectory and dynamics {#trajectory-and-dynamics}
 
-Application: generate ligand–receptor hypotheses between defined cell populations.
+Trajectory is appropriate only when a continuous biological process is plausible and sampled. The bundled `pancreas_sub` contains RNA, spliced, and unspliced assays, which makes it suitable for teaching a dynamics-aware decision path.
+
+### PAGA for cluster connectivity
 
 ```r
-chat <- RunCellChat(srt, group.by = "cell_type")
+srt <- RunPAGA(
+  srt = srt,
+  assay_x = "RNA",
+  layer_x = "counts",
+  group.by = "annotation_final",
+  linear_reduction = "pca",
+  nonlinear_reduction = "umap",
+  use_rna_velocity = FALSE,
+  infer_pseudotime = TRUE,
+  root_group = "progenitor",
+  backend = "cpp"
+)
+
+PAGAPlot(
+  srt,
+  type = "connectivities",
+  reduction = "umap",
+  edge_threshold = 0.05,
+  label = TRUE
+)
 ```
 
-Expected output: candidate sender–receiver pathways and interaction strengths. Required boundary: expression-based communication is hypothesis generation, not proof of physical signalling.
+Root selection must be justified by biology, sampling time, or orthogonal evidence. Do not choose the root that produces the most attractive direction.
 
-## Regulation and metabolism
+### Potency and lineage alternatives
 
 ```r
-regulons <- RunSCENIC(srt, group.by = "cell_type")
-metabolism <- RunMetabolism(srt, group.by = "cell_type")
+srt <- RunCytoTRACE(srt)
+CytoTRACEPlot(srt, reduction = "umap", group.by = "annotation_final")
+
+srt <- RunSlingshot(
+  srt,
+  group.by = "annotation_final",
+  reduction = "umap",
+  start = "progenitor",
+  seed = 20260807
+)
 ```
 
-Use SCENIC for candidate regulon activity and metabolism scoring for relative pathway programmes. Both depend on gene coverage, references, and optional backends; they do not directly measure TF binding or metabolite flux.
+SCOP also exports `RunPalantir()`, `RunMonocle2()`, and `RunMonocle3()`. For RNA-velocity extensions it exports `RunSecActVelocity()` and `VelocityPlot()`; there is no exported `RunVelocity()` in the audited 0.8.9 runtime. Compare branches with known markers, time points, and method sensitivity. A pseudotime curve is an ordering model, not direct observation of one cell becoming another.
 
-## Malignancy and phenotype association
+## 6 · Cell–cell communication
 
 ```r
-cnv <- RunCNV(srt, group.by = "cell_type")
-scissor <- RunScissor(
+srt <- RunCellChat(
+  srt,
+  group.by = "annotation_final",
+  species = "Homo_sapiens",
+  split.by = "condition",
+  assay = "RNA",
+  layer = "data",
+  min.cells = 10,
+  backend = "cpp"
+)
+
+CCCNetworkPlot(
+  srt,
+  method = "CellChat",
+  plot_type = "circle",
+  display_by = "aggregation",
+  group.by = "annotation_final"
+)
+
+CCCHeatmap(
+  srt,
+  method = "CellChat",
+  plot_type = "bubble",
+  sender.use = "macrophage",
+  receiver.use = "T_cell"
+)
+```
+
+Required review: ligand and receptor expression, minimum group size, database/species match, replicated condition comparison, robustness to annotation uncertainty, and spatial or protein support where available. Expression-based edges are hypotheses; they are not proof of ligand secretion, receptor activation, physical contact, or functional signalling.
+
+## 7 · Regulatory and metabolic programmes
+
+### SCENIC
+
+```r
+srt <- RunSCENIC(
+  srt,
+  assay = "RNA",
+  layer = "counts",
+  species = "Homo_sapiens",
+  ranking_dbs = ranking_database_files,
+  motif_annotations = motif_annotation_file,
+  backend = "cpp",
+  cores = 4,
+  seed = 20260807,
+  work_dir = "artifacts/scenic"
+)
+
+SCENICPlot(
+  srt,
+  group.by = "annotation_final",
+  plot_type = "rss_heatmap",
+  top_n = 12
+)
+```
+
+Record genome build, motif database files, species, regulators, backend, seed, and work directory. Regulon activity is a model-derived programme; it is not direct TF binding evidence.
+
+### Metabolism
+
+```r
+srt <- RunMetabolism(
+  srt,
+  assay = "RNA",
+  group.by = "annotation_final",
+  layer = "counts",
+  db = "KEGG",
+  species = "Homo_sapiens",
+  method = "AUCell",
+  backend = "cpp",
+  seed = 20260807
+)
+
+MetabolismPlot(
+  srt,
+  group.by = "annotation_final",
+  plot_type = "heatmap"
+)
+```
+
+Test library-size and cell-state confounding and inspect pathway gene coverage. Relative transcript scores are not metabolite concentrations or metabolic flux.
+
+## 8 · Malignancy and phenotype association
+
+### Expression-derived CNV
+
+```r
+srt <- RunCNV(
+  srt,
+  method = "copykat",
+  assay = "RNA",
+  layer = "counts",
+  group.by = "annotation_final",
+  reference.by = "annotation_final",
+  reference = c("T_cell", "B_cell", "endothelial"),
+  genome = "hg38",
+  sample.by = "sample_id",
+  output_dir = "artifacts/cnv"
+)
+
+CNVPlot(
+  srt,
+  plot_type = "heatmap",
+  method = "copykat",
+  group.by = "annotation_final"
+)
+```
+
+The normal reference must be justified and free of suspected malignant cells. Validate large-scale patterns with DNA, pathology, known tumour markers, or another orthogonal source. CNV-like expression alone is not a clinical malignancy diagnosis.
+
+### Scissor phenotype association
+
+```r
+srt <- RunScissor(
   srt,
   bulk_dataset = bulk_expression,
-  phenotype = phenotype_vector
+  phenotype = phenotype_vector,
+  assay = "RNA",
+  bulk_assay = "counts",
+  layer = "counts",
+  family = "binomial",
+  backend = "cpp",
+  cutoff = 0.2,
+  seed = 20260807
+)
+
+ScissorPlot(
+  srt,
+  plot_type = "umap",
+  reduction = "umap",
+  group.by = "annotation_final"
 )
 ```
 
-CNV-like expression patterns require normal references and careful validation. Scissor-like phenotype association requires aligned bulk phenotype inputs. Neither should be run merely because a tumour dataset exists.
+Bulk samples, phenotype values, feature identifiers, direction, and covariates must be aligned before fitting. Association with a bulk phenotype does not establish that the selected cells cause the phenotype.
 
-## A coherent paper story
+## 9 · Build one coherent paper story
 
-A defensible analysis often follows one chain:
+A defensible chain is usually:
 
-> cell population change → sample-level differential programme → enriched biological processes → candidate regulator or interaction → orthogonal/spatial validation
+> replicated population change → sample-level expression programme → enrichment → one candidate regulator or interaction → orthogonal or spatial validation
 
-Stop when the data cannot support the next arrow. The [paper framework](paper-framework.qmd) turns this chain into figures, tables, and checkpoints.
+For every arrow, write the evidence that authorizes the next step:
+
+| Arrow | Minimum authorization | Stop rule |
+|---|---|---|
+| composition → DEG | replicated samples and enough cells per type | insufficient sample-level counts |
+| DEG → enrichment | stable ranked statistic and identifier mapping | unstable contrast or failed mapping |
+| enrichment → mechanism | coherent leading-edge genes | term driven by artefact/redundancy |
+| mechanism → communication/regulation | matching cell state and prerequisites | missing backend/reference or contradictory biology |
+| single-cell → spatial validation | compatible tissue/condition and coordinate QC | datasets are not comparable |
+
+::: {.checkpoint}
+**Checkpoint 2 — advanced-analysis bundle**
+
+For each retained module, save the scientific question, input checkpoint hash, function and exact arguments, backend/database versions, complete result table, SCOP-native figure, sensitivity analysis, and one sentence stating what the result cannot prove.
+:::
+
+## Failure modes
+
+| Symptom | Likely cause | Response |
+|---|---|---|
+| tiny DEG P values with one sample per group | cells treated as replicates | stop inference; acquire replication or label as descriptive |
+| thousands of generic enriched terms | poor universe, term redundancy, broad gene list | fix identifiers/universe and inspect leading edges |
+| proportion test reports a rare-cell change | unstable denominator or very low counts | inspect per-sample counts and sensitivity |
+| trajectory reverses when the root changes | root not biologically anchored | report uncertainty or stop directional interpretation |
+| communication network is dense everywhere | low threshold, broad labels, database effects | restrict question and validate expression/replication |
+| SCENIC/metabolism follows library size | technical confounding | inspect depth correlations and matched comparisons |
+| CNV calls immune cells malignant | contaminated/invalid reference or technical bias | rebuild reference and require orthogonal validation |
+| optional runner fails at setup | missing database, Python/R backend, or genome resource | record `not executed`; do not publish a placeholder result |
+
+::: {.exercise}
+## Practice task
+
+Write one advanced-analysis specification for your own study. Include: biological question, independent unit, object fields, runner, plotter, expected result table, one sensitivity test, one stopping rule, and the strongest conclusion you would allow. If the design has no biological replication, rewrite it as a descriptive analysis.
+:::
+
+::: {.boundary}
+Only the beta-versus-alpha pseudobulk result and its SCOP `VolcanoPlot()` are executed evidence in this chapter. The remaining code is a version-checked SCOP 0.8.9 template and must not be described as completed until its prerequisites, backend, result object, and plot have actually been validated on the target study.
+:::

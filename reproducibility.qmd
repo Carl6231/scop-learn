@@ -1,65 +1,271 @@
 ---
 title: "Reproduce the published evidence"
-description: "Exact runtime, seed, source H5 hash, checkpoints, manifests, generated figures, and rebuild commands for SCOP Learn."
+description: "Exact runtime, inputs, checksums, SCOP-native figure provenance, manifests, checkpoints, rebuild commands, deterministic boundaries, and verification gates for SCOP Learn."
 ---
 
-## Audited runtime
+The website is a rendered view of an evidence chain. The source data or bundled object produces a checkpoint and complete result; SCOP produces the published analysis plot; component manifests record execution states and hashes; a top-level manifest binds all committed evidence together.
 
-- R 4.5.1
-- SCOP 0.8.9
-- Seurat 5.5.0
-- seed `20260807`
-- 314 SCOP namespace exports
+::: {.learning-objectives}
+## Learning outcomes
 
-The package versions and optional-backend status are recorded in [runtime.json](evidence/real-data/runtime.json); complete session output is in [session-info.txt](evidence/real-data/session-info.txt).
+You will learn to:
 
-## Rebuild
+1. rebuild all committed real-data evidence from the named inputs;
+2. verify component and figure hashes instead of trusting file names;
+3. distinguish deterministic code, environment-dependent output, and unavailable backends;
+4. confirm that every published analysis PNG comes from an exported SCOP plotter;
+5. adapt the evidence-chain pattern to your own study.
+:::
 
-From the repository root:
+## 1 · Audited runtime
+
+| Component | Published value |
+|---|---|
+| R | 4.5.1 |
+| SCOP | 0.8.9 |
+| Seurat | 5.5.0 |
+| seed | `20260807` |
+| SCOP namespace exports | 314 |
+
+The generated [runtime manifest](evidence/real-data/runtime.json) also records optional backend availability:
+
+| Backend/package | Evidence runtime |
+|---|---|
+| CellTypist | available and executed |
+| edgeR | available and executed |
+| harmony | available and executed |
+| clustree | available and executed |
+| SingleR / celldex | unavailable; not executed |
+| spacexr | unavailable; RCTD not executed |
+| zellkonverter | unavailable; H5AD conversion not executed |
+| loomR | unavailable; Loom conversion not executed |
+
+Package startup warnings that a dependency was built under a nearby R patch version do not automatically invalidate a result, but they belong in the session record and should be investigated if numerical or ABI failures occur.
+
+## 2 · Source input and checksum
+
+Five teaching objects come from the installed SCOP package. The external raw-format case uses the official 10x PBMC 1k v3 filtered H5:
+
+```text
+SHA-256  8191f576550c1b449d03441b9eb098ee9f73fa82513d171ba87d31d551e3ffda
+features 33,538
+cells    1,222
+UMIs     9,235,144
+```
+
+Download it into the ignored artifact directory:
 
 ```bash
 mkdir -p artifacts/real-data/input
 curl -L --fail \
   -o artifacts/real-data/input/pbmc_1k_v3_filtered_feature_bc_matrix.h5 \
   https://cf.10xgenomics.com/samples/cell-exp/3.0.0/pbmc_1k_v3/pbmc_1k_v3_filtered_feature_bc_matrix.h5
+```
 
+Verify before running R:
+
+```bash
+shasum -a 256 artifacts/real-data/input/pbmc_1k_v3_filtered_feature_bc_matrix.h5
+```
+
+If the checksum differs, stop. Do not silently update the expected value; determine whether the source changed, the download is incomplete, or the wrong file was used.
+
+::: {.input-contract}
+**Rebuild contract**
+
+- repository checked out at a named commit;
+- expected H5 checksum matches;
+- installed R/SCOP/Seurat versions recorded;
+- write access to ignored `artifacts/`;
+- sufficient memory/disk for 163 MB cross-source checkpoint and temporary matrices;
+- optional backend status captured before interpreting module failures.
+:::
+
+## 3 · Run the evidence builder
+
+From the repository root:
+
+```bash
 Rscript scripts/build-real-evidence.R
+```
+
+The script executes seven stages:
+
+1. runtime/package/backend inventory;
+2. 10x H5 → three-file → RDS structural round-trip;
+3. real `pancreas_sub` single-sample construction;
+4. real `panc8_sub` SCT + Harmony integration;
+5. real `pbmcmultiome_sub` annotation evaluation and panc8 pseudobulk;
+6. real human/mouse Visium spatial workflows;
+7. component hashes, figure provenance, critical assertions, and session record.
+
+Successful completion prints seven component manifests and eleven real-data figures. It also stops if a critical assertion fails.
+
+## 4 · What the evidence builder regenerates
+
+### Committed evidence
+
+- `evidence/real-data/runtime.json`
+- `evidence/real-data/input-formats.json`
+- `evidence/real-data/single-sample.json`
+- `evidence/real-data/cross-source.json`
+- `evidence/real-data/annotation.json`
+- `evidence/real-data/advanced.json`
+- `evidence/real-data/spatial.json`
+- `evidence/real-data/manifest.json`
+- `evidence/real-data/dataset-catalog.csv`
+- `evidence/real-data/pseudobulk-alpha-vs-beta.csv`
+- `evidence/real-data/session-info.txt`
+- eleven PNGs under `assets/figures/real-data/`
+
+### Ignored but hashed checkpoints
+
+Large RDS files are written under `artifacts/real-data/checkpoints/`. They are not committed, but their path, byte size, and SHA-256 appear in component manifests. This lets a local rebuild prove which object generated a result without putting large binaries in Git.
+
+## 5 · Verify the top-level manifest
+
+The manifest contains seven component records, eleven figure records, and critical assertions. Every figure record includes `path`, `sha256`, `bytes`, `plot_function`, `dataset`, and `source_checkpoint`.
+
+```r
+manifest <- jsonlite::read_json(
+  "evidence/real-data/manifest.json",
+  simplifyVector = TRUE
+)
+
+stopifnot(length(manifest$components) == 7)
+stopifnot(length(manifest$figures) == 11)
+stopifnot(all(unlist(manifest$critical_assertions)))
+
+plot_functions <- vapply(manifest$figures, `[[`, character(1), "plot_function")
+stopifnot(all(vapply(strsplit(plot_functions, " + ", fixed = TRUE), function(x) {
+  all(startsWith(x, "scop::"))
+}, logical(1))))
+```
+
+Hash verification:
+
+```r
+sha256 <- function(path) {
+  digest::digest(path, algo = "sha256", file = TRUE)
+}
+
+for (item in manifest$components) {
+  stopifnot(file.exists(item$path), identical(sha256(item$path), item$sha256))
+}
+for (item in manifest$figures) {
+  stopifnot(file.exists(item$path), identical(sha256(item$path), item$sha256))
+}
+```
+
+If `digest` is unavailable, use `openssl::sha256(file(path))` or the system `shasum -a 256`, then compare the hexadecimal value. Do not weaken the check to file existence.
+
+## 6 · Published figure provenance
+
+Every analysis PNG in the current manifest is drawn by an exported SCOP plotter:
+
+| Figure family | SCOP plotter |
+|---|---|
+| single-sample QC | `FeatureStatPlot()` |
+| cluster stability | `ClusterTreePlot()` |
+| dimension evidence | `DimsEstimatePlot()` |
+| single/cross-source embedding | `CellDimPlot()` |
+| annotation markers | `GroupHeatmap()` |
+| pseudobulk differential expression | `VolcanoPlot()` |
+| spatial domains/features | `SpatialSpotPlot()` + `SpatialVariableFeaturePlot()` |
+| spatial graph | `SpatialNetworkPlot()` |
+| spatial neighbourhoods | `SpatialNeighborhoodPlot()` |
+
+External modelling is allowed when SCOP is not the statistical engine—for example, edgeR produces the valid pseudobulk table—but the displayed analysis plot and its function provenance remain explicit.
+
+## 7 · Critical assertions and exact outcomes
+
+The build must prove:
+
+- H5 ↔ three-file dimensions and total UMI equality;
+- H5 ↔ RDS dimensions;
+- 979 cells retained in the executed single-sample case;
+- a real Harmony reduction in the cross-source case;
+- non-empty pseudobulk results: 16 pseudo-samples, 5,227 genes tested, 527 meeting the stated threshold;
+- at least 20 Moran-ranked spatial features;
+- all analysis figures use SCOP plotters;
+- no synthetic dataset is primary evidence.
+
+These numbers are regression expectations for the locked runtime/data, not universal biological thresholds.
+
+## 8 · Render the bilingual website
+
+After evidence succeeds:
+
+```bash
 quarto render
 ```
 
-The expected H5 SHA-256 is:
+The GitHub quality workflow uses Quarto 1.10.18 and verifies:
 
-```text
-8191f576550c1b449d03441b9eb098ee9f73fa82513d171ba87d31d551e3ffda
-```
+- all English/Chinese routes exist and have parity;
+- metadata, canonical and language-alternate links;
+- no local paths or token patterns leak into output;
+- all internal links/anchors and image alt text;
+- component/figure hashes and execution states;
+- external HTTPS links;
+- browser accessibility for English and Chinese home pages.
 
-## Evidence chain
+If local Quarto is unavailable, CI can render, but local source-level and figure-level verification should still run before publication.
 
-The [top-level manifest](evidence/real-data/manifest.json) hashes seven component manifests and every published real-data figure. It asserts:
+## 9 · Deterministic, environment-dependent, and external components
 
-- exact H5 → three-file and H5 → RDS round-trip checks;
-- more than 900 cells retained in the single-sample workflow;
-- a real Harmony reduction in the cross-source workflow;
-- a non-empty pseudobulk result;
-- at least 20 Moran-ranked spatial features;
-- no synthetic primary evidence.
+| Component | Reproducibility expectation |
+|---|---|
+| source checksum, dimensions, total counts | exact |
+| manifest/component hashes on same locked output | exact |
+| filtering rules and retained cell identities | exact under locked input/runtime |
+| edgeR result table | expected exact/near-exact under locked versions |
+| clustering/UMAP coordinates | seed-controlled but may vary across numerical libraries/platforms |
+| CellTypist | depends on Python environment and exact model file |
+| optional databases (motifs, pathways, references) | must be versioned separately |
+| H5AD/Loom/RCTD in this runtime | not executed, so no output reproducibility claim |
 
-Large RDS checkpoints are regenerated locally under `artifacts/` and intentionally excluded from Git. Their SHA-256 hashes and byte sizes are recorded in component manifests.
+A seed controls stochastic calls that honor it. It does not freeze external models, databases, C++ math libraries, or a package resolver.
 
-## What is deterministic and what is external
+## 10 · Clean-room verification strategy
 
-The R seed fixes stochastic steps used here. Exact floating-point or UMAP coordinates can still vary with platform and dependency versions. CellTypist additionally depends on the Python environment and `Immune_All_Low.pkl`; the evidence manifest records the executed model and result summary.
+For a serious release:
 
-## Evidence files
+1. clone into a new directory;
+2. verify the commit and source H5 checksum;
+3. create a clean R library/environment;
+4. install the locked package versions;
+5. rebuild evidence once;
+6. compare manifests, numeric invariants, and every PNG visually;
+7. render the site;
+8. inspect desktop and mobile pages;
+9. preserve the build log and new manifest as release evidence.
 
-- [input formats](evidence/real-data/input-formats.json)
-- [single sample](evidence/real-data/single-sample.json)
-- [cross source](evidence/real-data/cross-source.json)
-- [annotation](evidence/real-data/annotation.json)
-- [advanced](evidence/real-data/advanced.json)
-- [spatial](evidence/real-data/spatial.json)
-- [full evidence builder](scripts/build-real-evidence.R)
+Do not delete a previous known-good manifest until the new build has passed. A rollback requires a known-good commit and evidence bundle.
 
-## Synthetic legacy examples
+::: {.checkpoint}
+**Reproduction checkpoint**
 
-The former synthetic cases are retained only as code-level smoke tests in the repository. They are not used as the curriculum’s biological evidence.
+A rebuild is accepted only when the input checksum matches, all critical assertions are true, component and figure hashes validate, eleven analysis figures have SCOP-native provenance, the bilingual site renders, and the actual exported images—not only the plotting code—have been visually inspected.
+:::
+
+## Failure modes
+
+| Symptom | Likely cause | Response |
+|---|---|---|
+| H5 hash mismatch | wrong/partial/updated file | stop and resolve source identity |
+| checkpoint hash differs but numeric assertions pass | serialization/platform difference | compare versions, object invariants, and result tables; document difference |
+| UMAP differs slightly | platform/numerical dependency | compare neighbourhood metrics and biological structure |
+| CellTypist label set changes | model/environment drift | lock model file/version and rerun annotation review |
+| manifest says `not executed` | optional backend absent | install/validate explicitly or keep the honest boundary |
+| figure exists but provenance missing | unmanaged/manual plotting path | regenerate through registered SCOP plotter |
+
+::: {.exercise}
+## Practice task
+
+Create a mini-manifest for one of your figures containing input checksum, object checkpoint hash, result-table hash, plot function, exact arguments, dataset/sample design, runtime versions, figure hash, and allowed claim. Then delete the figure and prove it regenerates from the recorded checkpoint.
+:::
+
+::: {.boundary}
+Reproducibility proves that a defined computation can be regenerated. It does not prove that the scientific design is unbiased, the cohort is representative, the labels are true, or the biological interpretation is causal.
+:::

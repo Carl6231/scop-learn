@@ -35,12 +35,12 @@
   "cluster_majority_accuracy_against_known_celltype": 0.9681,
   "figure": {
     "path": "assets/figures/real-data/cross-source-integration.png",
-    "sha256": "f63a02f54388d5b9765534c11a03adcb553f8ef60cacd61501619f371d234ee8"
+    "sha256": "f876d409dabc3d696d4570d930d5d812e3b0fc0ae2272ba088777d4efe219134"
   },
   "checkpoint": {
     "path": "artifacts/real-data/checkpoints/cross-source-panc8.rds",
-    "sha256": "a17c12b6c169775d56497c85540e3ae74c97a76a1ee8f07131c404391a6e19eb",
-    "bytes": 163041263
+    "sha256": "1336594ec2492d2dce62678e7c6abc9c2f0330ae8de61dd705a86b485daa0a91",
+    "bytes": 163041117
   },
   "claim_boundary": "The eight dataset labels are technical sources, not eight biological replicates; mixing and label preservation diagnose integration only."
 }

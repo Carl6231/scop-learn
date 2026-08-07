@@ -1,113 +1,403 @@
 ---
 title: "Read single-cell input formats"
-description: "Executable readers for 10x H5, 10x three-file directories, RDS, H5AD, Loom, and multi-sample inputs."
+description: "Detailed, auditable readers for 10x H5, three-file matrices, RDS, H5AD, Loom, delimited matrices, multimodal data, and multi-sample studies before entering SCOP."
 ---
 
-SCOP does not replace every low-level file reader. Use the format-native reader, create or convert a Seurat object, then enter the SCOP workflow. Always inspect dimensions, sparsity, feature names, barcode uniqueness, assay names, and metadata immediately after reading.
+SCOP starts after a valid object exists. It does not need to replace every format-native reader. The safe pattern is **identify the file contract → read without destroying sparsity → construct/convert a Seurat object → audit counts, features, barcodes, assays, layers, reductions, and metadata → save an immutable import checkpoint**.
 
-## 10x H5 {#10x-h5}
+::: {.learning-objectives}
+## Learning outcomes
+
+You will learn to:
+
+1. identify the correct reader from the files you received;
+2. read 10x H5 and the 10x three-file directory safely;
+3. audit an RDS instead of trusting its preprocessing history;
+4. convert H5AD and Loom through SCOP and test what survived;
+5. protect sparse matrices when importing CSV/TSV;
+6. retain modalities and sample-level metadata before merge;
+7. produce one format-independent object audit and checkpoint.
+:::
+
+## 1 · Choose the reader from the evidence on disk
+
+| What you have | Reader | Expected object | Stop before analysis when |
+|---|---|---|---|
+| one `filtered_feature_bc_matrix.h5` | `Seurat::Read10X_h5()` | sparse matrix or named modality list | Gene Expression is absent or dimensions are implausible |
+| `matrix.mtx(.gz)` + `features.tsv(.gz)` + `barcodes.tsv(.gz)` | `Seurat::Read10X()` | sparse matrix or modality list | files are missing, mixed between samples, or reordered |
+| `.rds` | `readRDS()` | often a Seurat object | class, counts, sample identity, or provenance is missing |
+| `.h5ad` | `scop::h5ad_to_srt()` | Seurat object | counts/categories/layers disappear in conversion |
+| `.loom` | `scop::loom_to_srt()` | Seurat object with optional spliced layers | feature/cell IDs or requested layers do not match |
+| rectangular CSV/TSV | `read.delim()` then sparse conversion | sparse matrix → Seurat | orientation, numeric values, or unique IDs are unclear |
+| multiple samples | one format-native read per sample | named list of Seurat objects | `sample_id` and design metadata are not locked |
+| SCOP-hosted dataset name | `LoadScopDataset()` | dataset-dependent | downloaded object and source/version were not audited |
+
+::: {.input-contract}
+**Minimum information to request from the data producer**
+
+- file format and pipeline/version that created it;
+- species and genome build;
+- feature identifier type (symbol, Ensembl ID, peak coordinate, antibody ID);
+- raw or filtered matrix status;
+- sample, patient, condition, batch, chemistry, and library identifiers;
+- whether barcodes are unique across libraries;
+- whether counts, normalized expression, embeddings, and annotations are present;
+- expected number of features/cells and checksum when available.
+:::
+
+## 2 · A reusable post-import audit
+
+Run the same audit after every reader. It fails early on duplicated cells, missing counts, dense accidents, or metadata mismatch.
 
 ```r
+library(scop)
 library(Seurat)
+library(Matrix)
 
-raw <- Read10X_h5("filtered_feature_bc_matrix.h5")
+audit_srt <- function(srt, expected_samples = NULL) {
+  stopifnot(inherits(srt, "Seurat"))
+  assay <- DefaultAssay(srt)
+  layers <- Layers(srt[[assay]])
+  stopifnot("counts" %in% layers)
+
+  counts <- LayerData(srt, assay = assay, layer = "counts")
+  stopifnot(nrow(counts) > 0, ncol(counts) > 0)
+  stopifnot(!anyDuplicated(rownames(counts)))
+  stopifnot(!anyDuplicated(colnames(counts)))
+  stopifnot(nrow(srt[[]]) == ncol(srt))
+  stopifnot(all(rownames(srt[[]]) == colnames(srt)))
+
+  if (!is.null(expected_samples)) {
+    stopifnot("sample_id" %in% colnames(srt[[]]))
+    stopifnot(setequal(unique(srt$sample_id), expected_samples))
+  }
+
+  list(
+    dimensions = dim(srt),
+    default_assay = assay,
+    assays = Assays(srt),
+    layers = layers,
+    sparse_counts = inherits(counts, "sparseMatrix"),
+    total_counts = sum(counts),
+    metadata = colnames(srt[[]]),
+    reductions = Reductions(srt),
+    graphs = Graphs(srt)
+  )
+}
+```
+
+Feature symbols can be duplicated in source data. If the reader makes them unique, preserve the stable original ID in feature metadata or an external mapping table. Never silently collapse different Ensembl IDs into one symbol.
+
+## 3 · 10x H5 {#10x-h5}
+
+The executed case uses the official 10x PBMC 1k v3 filtered H5.
+
+```r
+h5_path <- "artifacts/real-data/input/pbmc_1k_v3_filtered_feature_bc_matrix.h5"
+raw <- Read10X_h5(h5_path, use.names = TRUE, unique.features = TRUE)
+
+if (is.list(raw)) {
+  stopifnot("Gene Expression" %in% names(raw))
+  counts <- raw[["Gene Expression"]]
+} else {
+  counts <- raw
+}
+
+srt <- CreateSeuratObject(
+  counts = counts,
+  project = "pbmc_1k_v3",
+  min.cells = 0,
+  min.features = 0
+)
+srt$sample_id <- "PBMC1K_V3"
+srt$technology <- "10x_3prime_v3"
+
+audit_srt(srt, expected_samples = "PBMC1K_V3")
+```
+
+Executed values:
+
+| Check | Value |
+|---|---:|
+| features | 33,538 |
+| cells | 1,222 |
+| total UMIs | 9,235,144 |
+| SHA-256 | `8191f576550c1b449d03441b9eb098ee9f73fa82513d171ba87d31d551e3ffda` |
+
+If H5 returns RNA, antibody capture, and CRISPR matrices, do not discard the non-RNA elements. Create one assay per modality and apply modality-specific QC.
+
+```r
+raw <- Read10X_h5("multi_feature_sample.h5")
+srt <- CreateSeuratObject(raw[["Gene Expression"]], assay = "RNA")
+
+if ("Antibody Capture" %in% names(raw)) {
+  srt[["ADT"]] <- CreateAssay5Object(counts = raw[["Antibody Capture"]])
+}
+if ("Peaks" %in% names(raw)) {
+  # Create a ChromatinAssay with genome/annotation information in an ATAC workflow.
+  stop("Peak import requires its genome and fragment-file contract")
+}
+```
+
+## 4 · 10x three-file directory {#10x-three-file-directory}
+
+One directory must contain matching files from the same library:
+
+```text
+filtered_feature_bc_matrix/
+├── barcodes.tsv.gz
+├── features.tsv.gz
+└── matrix.mtx.gz
+```
+
+```r
+dir_path <- "data/S01/filtered_feature_bc_matrix"
+required <- c("matrix.mtx.gz", "features.tsv.gz", "barcodes.tsv.gz")
+stopifnot(all(file.exists(file.path(dir_path, required))))
+
+raw <- Read10X(
+  data.dir = dir_path,
+  gene.column = 2,
+  unique.features = TRUE,
+  strip.suffix = FALSE
+)
 counts <- if (is.list(raw)) raw[["Gene Expression"]] else raw
-srt <- CreateSeuratObject(counts, project = "study_name")
-
-dim(srt)
-sum(duplicated(rownames(srt)))
-sum(duplicated(colnames(srt)))
+srt <- CreateSeuratObject(counts, project = "S01")
+srt$sample_id <- "S01"
+audit_srt(srt, expected_samples = "S01")
 ```
 
-The executed case reads the official PBMC 1k v3 H5: **33,538 features, 1,222 cells, 9,235,144 UMIs**, SHA-256 `8191f576…ffda`.
+The executed evidence reconstructed this directory from the real H5 and proved exact equality of **dimensions** and **total UMIs**. It did not rely on a visual spot check.
 
-## 10x three-file directory {#10x-three-file-directory}
+Common failures:
 
-The directory must contain matching `matrix.mtx.gz`, `features.tsv.gz`, and `barcodes.tsv.gz` files.
+| Symptom | Cause | Correction |
+|---|---|---|
+| “Barcode file missing” | wrong directory level or renamed file | point to the directory containing all three standard names |
+| feature number differs from matrix rows | files mixed across runs | reacquire a consistent trio; do not truncate |
+| barcodes collide after merge | identical 10x barcode sequences across libraries | add stable sample prefixes during merge |
+| first feature column is used unexpectedly | ID/name column misunderstood | inspect `features.tsv.gz` and set `gene.column` deliberately |
+
+## 5 · RDS: audit history, not only class {#rds}
 
 ```r
-counts <- Read10X("filtered_feature_bc_matrix/")
-srt <- CreateSeuratObject(counts, project = "study_name")
+obj <- readRDS("object.rds")
+stopifnot(inherits(obj, "Seurat"))
+
+audit_srt(obj)
+table(obj$sample_id, useNA = "ifany")
+table(obj$condition, useNA = "ifany")
 ```
 
-Do not read the three files independently and reorder one of them. The executed evidence reconstructs the three-file form from the real H5 and verifies both dimensions and total UMI count exactly.
-
-## RDS {#rds}
-
-```r
-srt <- readRDS("object.rds")
-stopifnot(inherits(srt, "Seurat"))
-dim(srt)
-Assays(srt)
-Layers(srt[[DefaultAssay(srt)]])
-head(srt[[]])
-```
-
-An RDS may already contain normalization, reductions, graphs, or stale identities. Treat it as an object to audit—not as proof that upstream processing was correct.
-
-## H5AD and Loom {#h5ad-and-loom}
-
-SCOP exports conversion helpers:
-
-```r
-srt_h5ad <- scop::h5ad_to_srt("object.h5ad")
-srt_loom <- scop::loom_to_srt("object.loom")
-```
-
-In the audited runtime, the H5AD and Loom conversion backends (`zellkonverter`, `loomR`) were not installed, so this site does not claim an executed conversion. After conversion, explicitly compare:
+Then inspect whether the stored results match the intended analysis:
 
 ```r
 list(
-  dimensions = dim(srt_h5ad),
-  assays = Assays(srt_h5ad),
-  metadata = colnames(srt_h5ad[[]]),
-  reductions = Reductions(srt_h5ad)
+  active_ident = head(Idents(obj)),
+  assays = Assays(obj),
+  layers = lapply(Assays(obj), function(a) Layers(obj[[a]])),
+  reductions = Reductions(obj),
+  graphs = Graphs(obj),
+  commands = names(obj@commands),
+  tools = names(obj@tools),
+  misc = names(obj@misc)
 )
 ```
 
-Check whether raw counts, categorical metadata, embeddings, spliced/unspliced layers, and feature identifiers survived.
-
-## CSV or TSV matrix
-
-Dense text is suitable only for small matrices. Confirm orientation before object construction and convert to a sparse matrix:
+An RDS can contain stale UMAP coordinates, a different default assay, integrated values instead of counts, split Seurat v5 layers, or identities that were manually overwritten. Preserve the original file and create a new audited checkpoint; do not overwrite the received object.
 
 ```r
-x <- read.delim("counts.tsv", row.names = 1, check.names = FALSE)
+saveRDS(obj, "artifacts/checkpoints/import-audited.rds", compress = FALSE)
+tools::md5sum("artifacts/checkpoints/import-audited.rds")
+```
+
+For publication-grade provenance, use SHA-256 in the final manifest even if a quick local example prints MD5.
+
+## 6 · H5AD through SCOP {#h5ad-and-loom}
+
+```r
+stopifnot(file.exists("object.h5ad"))
+srt_h5ad <- scop::h5ad_to_srt(
+  path = "object.h5ad",
+  verbose = TRUE,
+  prepare_for_reticulate = TRUE
+)
+
+audit_srt(srt_h5ad)
+```
+
+Conversion requires `zellkonverter` in the audited SCOP path. It was **not installed** in the evidence runtime, so this site does not claim that an H5AD was executed. Validate all high-risk mappings:
+
+| AnnData source | Expected Seurat destination | Validation |
+|---|---|---|
+| `.X` | assay layer, often normalized data | determine whether values are integer counts or transformed |
+| `.layers["counts"]` | `counts` layer | dimensions, total counts, integerness |
+| `.obs` | cell metadata | row names exactly match cell barcodes |
+| `.var` | feature metadata | feature order and stable IDs retained |
+| `.obsm["X_umap"]` | reduction | cells and dimensions match |
+| categorical `.obs` | factors/characters | levels and missing values preserved |
+
+Never assume `.X` contains raw counts. Record the AnnData layer selected as counts before downstream QC or pseudobulk.
+
+## 7 · Loom through SCOP
+
+```r
+stopifnot(file.exists("object.loom"))
+srt_loom <- scop::loom_to_srt(
+  path = "object.loom",
+  layers = c("spliced", "unspliced"),
+  verbose = TRUE,
+  chunk_rows = 1000
+)
+
+audit_srt(srt_loom)
+Assays(srt_loom)
+```
+
+The audited runtime lacked `loomR`, so the conversion is a version-checked template, not executed evidence. Confirm that cell and feature names are identical across the main, spliced, and unspliced matrices; otherwise velocity results are invalid before any modelling begins.
+
+## 8 · CSV or TSV matrix
+
+Dense text is appropriate only for small matrices. Inspect the first lines before reading the full file.
+
+```r
+x <- read.delim(
+  "counts.tsv",
+  row.names = 1,
+  check.names = FALSE,
+  stringsAsFactors = FALSE
+)
+
+stopifnot(nrow(x) > 0, ncol(x) > 0)
 stopifnot(all(vapply(x, is.numeric, logical(1))))
 stopifnot(!anyDuplicated(rownames(x)), !anyDuplicated(colnames(x)))
+stopifnot(all(is.finite(as.matrix(x))))
+stopifnot(all(as.matrix(x) >= 0))
 
-# expected contract: genes in rows, cells in columns
-counts <- Matrix::Matrix(as.matrix(x), sparse = TRUE)
-srt <- CreateSeuratObject(counts)
+# Contract: genes in rows, cells in columns.
+counts <- Matrix(as.matrix(x), sparse = TRUE)
+srt <- CreateSeuratObject(counts, project = "text_import")
+audit_srt(srt)
 ```
 
-If the first rows look like barcodes and the columns look like genes, stop and transpose deliberately. For large data, preserve Matrix Market/H5 sparsity instead of writing a huge dense CSV.
+If rows resemble barcodes and columns resemble genes, stop and transpose deliberately. If values contain negative numbers, decimals after log transformation, TPM, CPM, or z-scores, they are not raw counts and cannot be used as raw-count input for doublet, decontamination, or pseudobulk count models.
 
-## Multimodal inputs
+## 9 · Multimodal objects
 
-When 10x returns RNA, antibody, or peak matrices, create separate assays and retain modality-specific feature identities. `pbmcmultiome_sub` contains `RNA` and `peaks`; the RNA workflow does not by itself constitute ATAC QC, latent semantic indexing, or WNN analysis.
-
-## Several samples
-
-Read each sample separately and add stable sample-level metadata before merge:
+`pbmcmultiome_sub` demonstrates the required distinction:
 
 ```r
-sample_dirs <- c(S01 = "data/S01/filtered_feature_bc_matrix",
-                 S02 = "data/S02/filtered_feature_bc_matrix")
-
-objects <- lapply(names(sample_dirs), function(id) {
-  x <- CreateSeuratObject(Read10X(sample_dirs[[id]]), project = id)
-  x$sample_id <- id
-  x$condition <- c(S01 = "control", S02 = "treated")[[id]]
-  x
-})
-names(objects) <- names(sample_dirs)
-
-merged <- merge(objects[[1]], y = objects[-1], add.cell.ids = names(objects))
+data(pbmcmultiome_sub, package = "scop")
+Assays(pbmcmultiome_sub)
+class(pbmcmultiome_sub[["RNA"]])
+class(pbmcmultiome_sub[["peaks"]])
 ```
 
-Do QC per sample before using a merged distribution; otherwise a low-quality sample can hide inside a global threshold.
+An RNA analysis does not automatically validate ATAC QC. For peaks, retain genome build, fragment file, TSS enrichment, nucleosome signal, peak coordinates, gene annotation, and peak calling history. For ADT, inspect isotype/background and modality-specific normalization. Merge modalities only through a method whose assumptions match the design.
 
-## Validation record
+## 10 · Several biological samples
 
-The exact reader calls and round-trip assertions are in the [input evidence manifest](evidence/real-data/input-formats.json) and the complete [evidence builder](scripts/build-real-evidence.R).
+Create a locked sample sheet before reading:
+
+```r
+sample_sheet <- data.frame(
+  sample_id = c("S01", "S02"),
+  patient_id = c("P01", "P02"),
+  condition = c("control", "treated"),
+  batch = c("B1", "B1"),
+  path = c(
+    "data/S01/filtered_feature_bc_matrix",
+    "data/S02/filtered_feature_bc_matrix"
+  )
+)
+stopifnot(!anyDuplicated(sample_sheet$sample_id))
+stopifnot(all(file.exists(sample_sheet$path)))
+```
+
+Read and audit separately:
+
+```r
+objects <- setNames(lapply(seq_len(nrow(sample_sheet)), function(i) {
+  row <- sample_sheet[i, ]
+  raw <- Read10X(row$path)
+  counts <- if (is.list(raw)) raw[["Gene Expression"]] else raw
+
+  x <- CreateSeuratObject(counts, project = row$sample_id)
+  x$sample_id <- row$sample_id
+  x$patient_id <- row$patient_id
+  x$condition <- row$condition
+  x$batch <- row$batch
+  audit_srt(x, expected_samples = row$sample_id)
+  x
+}), sample_sheet$sample_id)
+```
+
+Perform per-sample QC before merge. When feature identifiers differ, harmonize with a documented mapping before taking an intersection or union. Then prefix barcodes:
+
+```r
+merged <- merge(
+  objects[[1]],
+  y = objects[-1],
+  add.cell.ids = names(objects),
+  project = "study"
+)
+stopifnot(!anyDuplicated(colnames(merged)))
+stopifnot(setequal(unique(merged$sample_id), sample_sheet$sample_id))
+```
+
+After merge, Seurat v5 may preserve split layers. That is expected. Audit them, complete per-sample decisions, then call `JoinLayers()` at the construction point defined in the [multi-sample chapter](multi-sample.qmd).
+
+## 11 · SCOP-hosted and matrix-plus-metadata inputs
+
+SCOP exposes `LoadScopDataset()` for named collections and `FetchH5()` for a data file plus metadata file:
+
+```r
+path <- LoadScopDataset(
+  dataset = "dataset_name",
+  collection = "Xenium",
+  cache_dir = "artifacts/scop-datasets",
+  return_path = TRUE,
+  update = FALSE
+)
+
+srt <- FetchH5(
+  data_file = "matrix.h5",
+  meta_file = "metadata.csv",
+  name = "study_name",
+  assay = "RNA",
+  layer = "counts"
+)
+```
+
+These calls do not remove the provenance obligation. Record the exact dataset name, collection, URL/version, downloaded checksum, metadata join key, and post-import audit.
+
+::: {.checkpoint}
+**Checkpoint — imported object**
+
+Save: immutable source checksum; reader and arguments; feature/cell dimensions; total counts; assay/layer map; sparse status; feature-ID type; sample-design table; duplicate checks; conversion-loss report; object checkpoint hash; R/SCOP/Seurat versions.
+:::
+
+## Failure modes
+
+| Symptom | Likely cause | Response |
+|---|---|---|
+| memory explodes during import | dense conversion | stop and return to H5/Matrix Market/sparse representation |
+| counts layer is absent | only normalized matrix was supplied | reacquire counts or limit downstream methods explicitly |
+| metadata rows become `NA` | barcode join mismatch | normalize keys and prove one-to-one matching |
+| cell names duplicate after merge | sample prefix missing | recreate merge with stable `add.cell.ids` |
+| H5AD looks transposed | feature/cell mapping misunderstood | compare names and dimensions with source AnnData |
+| spliced/unspliced sizes differ | Loom layers misaligned | stop velocity analysis and repair source mapping |
+| multi-feature H5 loses ADT/peaks | only Gene Expression retained | construct separate assays and audit each modality |
+| RDS opens but counts are stale | object history/default assay unclear | preserve file, audit commands/layers, rebuild if necessary |
+
+::: {.exercise}
+## Practice task
+
+Choose one file you actually received. Write its reader, the expected dimensions and identifier type, the five metadata fields that must survive, the audit command, one format-specific failure condition, and the path/checksum of the immutable import checkpoint. Do not proceed to QC until the contract passes.
+:::
+
+The exact real H5 round-trip assertions are in the [input evidence manifest](evidence/real-data/input-formats.json), and the implementation is in the [evidence builder](scripts/build-real-evidence.R).
+
+::: {.boundary}
+The 10x H5, reconstructed three-file directory, and RDS round-trip were executed. H5AD and Loom are accurate SCOP 0.8.9 call templates but remain `not executed` because their optional conversion backends were absent. A successful file read proves structure, not biological quality or study validity.
+:::

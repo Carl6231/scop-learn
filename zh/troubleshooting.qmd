@@ -1,38 +1,238 @@
 ---
-title: "故障排查决策表"
-description: "SCOP 输入、layer、质控、整合、注释、可选后端和空间坐标故障的证据化处理。"
+title: "SCOP 故障排查决策指南"
+description: "按阶段排查 input、layers、QC、doublets、integration、annotation、pseudobulk、optional backends、figures、manifests 与 spatial coordinates。"
 ---
 
-| 表现 | 先检查 | 常见原因 | 处理 |
-|---|---|---|---|
-| `Read10X()` 说缺 barcode | 目录文件列表 | 缺 `.gz`、目录层级错、文件改名 | 恢复标准三件套名称并放同一目录 |
-| H5 返回 list | `names(raw)` | 含多种 feature type | 选 `Gene Expression`，其他模态分开保存 |
-| feature 重名 | `duplicated(rownames(srt))` | gene symbol 冲突 | 读取时唯一化或保留稳定 ID，记录映射 |
-| “layer is empty” | `Layers(srt[[assay]])` | 只有 counts 或 layer 选错 | join/选择正确 layer，不虚构已归一化数据 |
-| QC 删除某样本多数细胞 | 逐样本分布与保留率 | 阈值不匹配或建库失败 | 单独审查该样本，不用全局阈值掩盖 |
-| 双细胞调用失败 | counts 是否整数、每样本细胞数、版本 | 输入不是原始 counts 或后端不兼容 | 回到 raw counts 按样本运行，记录失败 |
-| Harmony 把 cell types 混在一起 | 整合前后 marker/近邻 | 过度校正或 batch 混杂 | 减少校正、换 batch，或停止整合 |
-| batch 仍分开 | 来源与生物学图 | 真实生物差异、无共同群或校正不足 | 不强迫混合；检查共同群与特征空间 |
-| 标签转移错误 | marker、score、参考覆盖 | 参考不匹配 | 换参考或保留 unknown，不能只看 confidence |
-| `RunLabelTransfer()` 要 ChromatinAssay | assay class | SCOP 路线用于 ATAC/multiome | 普通 RNA-to-RNA 用 Seurat anchors |
-| CellTypist 反复准备 Python | SCOP 环境日志 | 环境/模型初始化 | 让托管环境完成，记录模型与版本 |
-| `RunRCTD()` 不可用 | `requireNamespace("spacexr")` | 缺后端 | 安装并验证，或声明去卷积未执行 |
-| 空间图镜像/平移 | 坐标列和图像尺度 | 混用坐标空间 | 所有空间函数使用同一已声明空间 |
-| DEG P 值极小但无重复 | sample count 和 design matrix | 把细胞当重复 | 按生物学样本聚合并重做 pseudobulk |
+排错应保留第一处失败证据。修改 package 或 workflow 前记录 exact call、complete error、input checkpoint、object audit 和 session information。修复最早破坏的 contract，后续症状常会一起消失。
 
-## 最小诊断包
+::: {.learning-objectives}
+## 学习目标
+
+你将学会：
+
+1. 将错误定位在 import、object、QC、construction、integration、annotation、inference、spatial 或 publication；
+2. 收集最小 diagnostic bundle；
+3. 区分 invalid input 与 missing backend；
+4. 避免隐藏 failed sample、覆盖 counts 或强迫结果；
+5. 定义问题真正解决的证据。
+:::
+
+## 1 · 从最早 failed gate 开始
+
+| 阶段 | 必须通过 | 不应继续 |
+|---|---|---|
+| input | checksum、dimensions、IDs、reader | wrong file、mixed trio、orientation unknown |
+| object | counts、sparse、metadata alignment | counts missing、duplicate cells、misalignment |
+| QC | per-sample distributions/retention | sample collapse 或 thresholds 不明 |
+| construction | joined layers、dims、graphs、stable clusters | wrong reduction/graph |
+| integration | source mixing + biology preservation | overcorrection/confounding/no overlap |
+| annotation | marker/reference consensus | forced label/reference mismatch |
+| inference | biological replication/design | cells as replicates/wrong coefficient |
+| spatial | coordinate/image/sample | mirrored/mixed coordinates |
+| publication | manifest/hashes/SCOP provenance/rendered QA | stale/non-SCOP figure |
+
+## 2 · Minimal diagnostic bundle
 
 ```r
-list(
-  dimensions = dim(srt),
-  assays = Assays(srt),
-  default_assay = DefaultAssay(srt),
-  layers = Layers(srt[[DefaultAssay(srt)]]),
-  reductions = Reductions(srt),
-  graphs = Graphs(srt),
-  metadata = colnames(srt[[]])
-)
+diagnose_srt <- function(srt) {
+  assay <- DefaultAssay(srt)
+  layers <- Layers(srt[[assay]])
+  counts <- if ("counts" %in% layers) {
+    LayerData(srt, assay = assay, layer = "counts")
+  } else NULL
+
+  list(
+    dimensions = dim(srt),
+    class = class(srt),
+    assays = Assays(srt),
+    default_assay = assay,
+    layers = layers,
+    sparse_counts = if (is.null(counts)) NA else inherits(counts, "sparseMatrix"),
+    cell_names_unique = !anyDuplicated(colnames(srt)),
+    feature_names_unique = !anyDuplicated(rownames(srt)),
+    metadata_rows_match = identical(rownames(srt[[]]), colnames(srt)),
+    metadata = colnames(srt[[]]),
+    reductions = Reductions(srt),
+    graphs = Graphs(srt),
+    images = Images(srt),
+    commands = names(srt@commands),
+    tools = names(srt@tools)
+  )
+}
+diagnose_srt(srt)
 sessionInfo()
 ```
 
-保存精确错误、前一条调用和这个诊断包。只有一张 UMAP 截图不足以诊断对象。
+```r
+writeLines(conditionMessage(error_object), "artifacts/last-error.txt")
+saveRDS(srt, "artifacts/failing-input.rds")
+```
+
+对象含敏感数据时只保存到 approved protected location。UMAP screenshot 不是 diagnostic bundle。
+
+## 3 · Input failures
+
+| 现象 | 第一证据 | 原因 | 修复 | 通过证据 |
+|---|---|---|---|---|
+| `Read10X()` 缺文件 | directory listing | level/name 错 | 恢复标准三件套 | expected dimensions |
+| features 与 matrix rows 不同 | headers/dim | 跨 sample 混文件 | 重新获取一致 trio | 三者一致 |
+| H5 返回 list | `names(raw)` | multi-feature | 选 RNA 且保留其他 modality | 每 modality 有 assay audit |
+| H5 hash 不同 | SHA-256 | partial/wrong/update | 停止识别 source | checksum 匹配 |
+| text import 内存暴涨 | class/file size | dense | 回到 H5/MTX/sparse | `sparseMatrix` |
+| “counts” 有负数/小数 | summary/provenance | normalized/log/scale | 重新获取 raw 或限制方法 | layer contract |
+| duplicate features | IDs/symbols | symbol collisions | stable IDs/mapping | unique + mapping |
+| metadata `NA` | barcode join | suffix/prefix mismatch | one-to-one keys | 无意外 missing |
+
+不能用截断 matrix 或循环 metadata 修复 dimension mismatch。
+
+## 4 · Assay/layer failures
+
+```r
+Assays(srt)
+DefaultAssay(srt)
+Layers(srt[[DefaultAssay(srt)]])
+```
+
+有 split source layers 时有计划地：
+
+```r
+srt <- JoinLayers(srt)
+stopifnot("counts" %in% Layers(srt[[DefaultAssay(srt)]]))
+```
+
+若原来没有 counts，JoinLayers 不能创造。不能把 normalized `data` 复制成 `counts`。
+
+Wrong default assay 会让 marker 使用 SCT/integrated/peaks。每个 method 前明确：
+
+```r
+DefaultAssay(srt) <- "RNA"
+stopifnot("counts" %in% Layers(srt[["RNA"]]))
+```
+
+搜索 full matrix 附近的 `as.matrix()`；只有小型教学 subset 才可接受。
+
+## 5 · QC/doublet/contamination
+
+| 现象 | 原因 | 处理 |
+|---|---|---|
+| QC 删除某 sample 多数 cells | failed library/global threshold | 单独检查并记录决定 |
+| rerun retained count 变化 | threshold/seed/version drift | 比较 cell-name sets/manifest |
+| mitochondrial % 全接近 0 | species/regex 错 | 检查 IDs 并用正确 pattern |
+| doublet runner 拒绝 | normalized input/too few/backend | 回 raw counts，per library 运行 |
+| 各 library doublet rate 完全相同 | global call | 按 library 重跑 |
+| decontamination 删除 known markers | overcorrection/background 错 | 比较 original/corrected，必要时停止 |
+| QC plot 与 threshold 不一致 | stale plot/metadata | 从同一 checkpoint 重建 `FeatureStatPlot()` |
+
+解决证据：before/after SCOP plot、retained table/sample、exclusion reasons、unchanged original-count checkpoint。
+
+## 6 · Dimension/clustering/UMAP
+
+`RunDimsEstimate()` 找不到 reduction：
+
+```r
+Reductions(srt)
+Embeddings(srt, "pca")[1:3, 1:3]
+```
+
+先运行所需 linear reduction 并使用准确名称。不能把 UMAP 当 linear reduction。
+
+`ClusterTreePlot()` 为空：
+
+```r
+grep("_snn_res\\.", colnames(srt[[]]), value = TRUE)
+```
+
+需要 resolution grid 和实际 prefix；一个 resolution 不能产生 tree。
+
+UMAP 大幅改变时比较 reduction、dimensions、seed、neighbours、versions、cell names。使用 structural metrics，而不是只做 pixel comparison。
+
+## 7 · Integration failures
+
+| 现象 | 含义 | 处理 |
+|---|---|---|
+| Harmony 后 cell types 混在一起 | overcorrection | 减弱 correction/改 batch 或停止 |
+| batches 仍分开 | true biology/no overlap/undercorrection | 检查 shared types/features，不强迫 mixing |
+| condition effect 消失 | confounding/overcorrection | 回到 design，不 integrate 掉 target |
+| rare type 只在一 source | source biology/artefact | separate/report limited support |
+| 有 integrated reduction 但 plot 用 PCA | wrong reduction | 明确传入 SCOP reduction |
+
+必须比较 pre/post source mixing、cell-type preservation、markers、composition、cluster structure。
+
+## 8 · Annotation failures
+
+| 现象 | 原因 | 处理 |
+|---|---|---|
+| 所有 cells 高置信 | closed vocabulary | 查 out-of-reference，保留 unknown |
+| T/NK 或 Mono/DC 互换 | shared programmes | 要求 positive + contradictory evidence |
+| within-dataset transfer 极好 | leakage/shared preprocessing | 独立验证并诚实报告 internal test |
+| `RunLabelTransfer()` 要 ChromatinAssay | RNA query 走错 multiome path | RNA anchors/correct assay |
+| SingleR load 失败 | package/reference 缺 | 安装/version 或 `not executed` |
+| fine label cells 太少 | resolution unsupported | 合并 broad 或 uncertain |
+| label 只在 failed sample | artefact | 审查 QC/markers/doublets/reference |
+
+解决证据是 consensus table、marker heatmap、confidence/uncertainty、cross-sample audit。
+
+## 9 · Pseudobulk/composition
+
+```r
+design <- unique(srt[[]][c("sample_id", "condition")])
+table(design$condition)
+```
+
+每组一个 independent sample 时停止 inference。Design matrix rank：
+
+```r
+X <- model.matrix(~ batch + condition, data = design)
+c(rank = qr(X)$rank, columns = ncol(X))
+```
+
+Rank deficiency 通常是 confounding/redundancy。不能仅为了得到 condition coefficient 删除必要 batch。检查 factor levels/coefficient direction，并报告每个 `sample × cell type` 的 cells/counts 和 sensitivity。
+
+## 10 · Optional backend failures
+
+```r
+backend_status <- c(
+  SingleR = requireNamespace("SingleR", quietly = TRUE),
+  celldex = requireNamespace("celldex", quietly = TRUE),
+  spacexr = requireNamespace("spacexr", quietly = TRUE),
+  zellkonverter = requireNamespace("zellkonverter", quietly = TRUE),
+  loomR = requireNamespace("loomR", quietly = TRUE)
+)
+backend_status
+```
+
+记录 runner/error、missing resource/model、env/version、失败发生在 result 前还是后、`not executed/failed` status 和 unblock 条件。不能用 synthetic values 画 placeholder。
+
+## 11 · Spatial failures
+
+| 现象 | 检查 | 处理 |
+|---|---|---|
+| mirrored/shifted | image key/coords/ranges | 声明 coordinate system 并验证 landmarks |
+| graph 跨 slices 连边 | sample/image | per-slice graph 或 block edges |
+| Moran genes 跟 depth | `nCount_Spatial` correlation | 检查 QC/depth 并限制解释 |
+| neighbourhood result 找不到 | `tool_name`/`srt@tools` | store/plot 使用同一名称 |
+| RCTD unavailable | `spacexr` | 安装验证或 not executed |
+| deconvolution 不合理 | reference mismatch | compatible reference + markers |
+| one section 当 patient replicates | `sample_id` table | 限制 descriptive spot-level |
+
+## 12 · Figure/publication failures
+
+若图不是 SCOP-native，检查 manifest 的 `plot_function`，只能由 `scop::...` plotters 组成；通过相关 SCOP function 重建。Manifest hash mismatch 表示 figure/component 在 manifest 后改变，必须 rebuild evidence，不能手改 hash，并查看 source-resolution image。
+
+Render failure 时运行 `quarto render`，修复具体 source line，再检查 internal links、image paths、alt、paired Chinese route，最后检查 desktop/mobile。Source 成功不保证 legend/table 可读。
+
+::: {.checkpoint}
+**解决检查点**
+
+只有 original minimal reproduction 通过、object invariants 保持、numeric/biological evidence 恢复、manifests/hashes 有效，并查看实际 SCOP output，才算解决。若 analysis 静默改变，仅“error 消失”不够。
+:::
+
+::: {.exercise}
+## 练习
+
+选一个最近 error，写 failing stage、exact call、checkpoint、diagnostic bundle、earliest violated contract、smallest repair、resolution proof 和 claim impact。若 fix 改变 independent unit 或删除 sample，应升级为 scientific decision。
+:::
+
+::: {.boundary}
+Troubleshooting 能恢复 intended computation，但不能挽救 unidentifiable design、缺 biological replication、不合适 reference 或 absent ground truth。
+:::

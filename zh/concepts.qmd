@@ -1,40 +1,192 @@
 ---
-title: "写代码前必须清楚的概念"
-description: "避免单细胞错误结论所需的样本、layer、整合、注释和统计推断原则。"
+title: "写代码前必须理解的核心概念"
+description: "详细定义实验单位、counts/layers、QC、integration、clustering、annotation、DEG 与 spatial mixture 的分析合同。"
 ---
 
-## 细胞是观测，样本才通常是实验单位
+最严重的单细胞错误通常不是语法错误，而是把 cell 当 patient、把 normalized values 当 counts、把 batch 当 condition，或把 visualization 当统计结果。本章定义后续所有 SCOP 教程使用的合同。
 
-矩阵可以有 10 万个细胞，但只有 6 位患者。治疗/疾病比较的有效重复通常是 6 个生物学样本，不是 10 万个相互独立的细胞。`sample_id`、`patient_id`、`condition` 必须从读取开始就保留。
+::: {.learning-objectives}
+## 学习目标
 
-## 质控是基于分布的决策
+你将学会：
 
-先计算并按样本查看 QC 指标，再选择和记录阈值。线粒体比例、检测基因数、UMI、双细胞分数、环境 RNA 和异常值规则对应不同失败模式。机械复制 `percent.mt < 20` 不是完整质控。
+1. 区分 cells、libraries、samples、patients、batches 和 dataset sources；
+2. 理解 counts、normalized data、scaled data、reductions 和 graphs 的用途；
+3. 把 QC/integration 当作证据驱动决策；
+4. 区分 clusters、cell identities 和 transient states；
+5. 让 DEG 方法匹配实验设计；
+6. 把 spot-level spatial 结果与 cell-resolved claims 分开。
+:::
 
-## 有意识地处理 Seurat v5 layers
+## 1 · Cells 是 observations，samples 才是实验单位
 
-merge 后可能保留多个分层。需要单一 counts/data layer 的函数前先：
+若 60,000 cells 来自 6 位患者、每组 3 位，cell table 有 60,000 行，但 treatment comparison 通常只有 **6 个独立 biological units**。同一患者的 cells 共享组织、遗传、环境与技术历史，不是成千上万位独立患者。
+
+| 字段 | 含义 | 示例 | 可作为独立单位？ |
+|---|---|---|---|
+| `cell_barcode` | droplet/cell observation | `S01_AAAC...` | 否 |
+| `library_id` | sequencing library | `LIB01` | 仅在与 biological sample 一一对应且 design 支持时 |
+| `sample_id` | biological specimen | `S01` | 通常是 |
+| `patient_id` | donor/subject | `P01` | 是；配对/重复设计必须保留 |
+| `condition` | biological contrast | control/treated | 否，只标注单位 |
+| `batch` | unwanted processing source | chemistry date | 否，是 covariate/correction target |
+| `dataset` / `technology` | public source/platform | smart-seq2 | 通常不是 |
 
 ```r
+design <- unique(srt[[]][c("sample_id", "patient_id", "condition", "batch")])
+stopifnot(!anyDuplicated(design$sample_id))
+table(design$condition)
+table(design$condition, design$batch)
+```
+
+若 condition 与 batch 完全重合，它们就是 confounded。Integration algorithm 不能恢复研究从未观察到的信息。
+
+## 2 · Assays 与 layers 回答不同问题
+
+- `counts`：非负 raw/count-like values；
+- `data`：通常是 normalized expression；
+- `scale.data`：用于部分模型的 transformed/scaled values；
+- `SCT` assay：包含 SCTransform model contract；
+- integrated/latent reduction：共同 representation，不是 raw-count inference；
+- `spliced/unspliced`：需要严格 feature/cell alignment；
+- `peaks`：不同 modality，需要 ATAC preprocessing。
+
+```r
+assay_map <- lapply(Assays(srt), function(a) {
+  list(class = class(srt[[a]]), layers = Layers(srt[[a]]))
+})
+assay_map
+```
+
+Counts 用于 count-based QC、必要的 contamination/doublet、pseudobulk 和 count models；normalized data 用于 marker visualization 和许多 scoring；scaled data/reductions 用于 PCA/clustering/visualization。不能仅凭数值外观猜 layer，必须记录 provenance。
+
+## 3 · Seurat v5 split layers 必须有意识处理
+
+Merge 后可能出现 `counts.S01`、`counts.S02`。这保留来源边界，并非自动错误。需要统一 layer 的函数之前，按计划检查并 join：
+
+```r
+Layers(srt[[DefaultAssay(srt)]])
 srt <- JoinLayers(srt)
 Layers(srt[[DefaultAssay(srt)]])
 ```
 
-## 整合既是校正，也有风险
+若仍需追踪失败样本，不要过早 join。Join 后重新验证 cell count、total counts、sample metadata 和 barcode uniqueness。
 
-整合要减少不需要的技术来源差异，同时保留研究所需生物学。至少验证：来源混合是否提高；同类细胞/研究条件是否保留；marker 是否仍可解释；不能把主要研究变量作为 batch 强行校正掉。
+## 4 · QC 是 distributional decision
 
-## 注释是多种证据的合成
+| Metric | 主要警报 | 为什么没有万能阈值 |
+|---|---|---|
+| `nFeature_RNA` | empty droplets 或复杂 multiplets | tissue/chemistry 的复杂度不同 |
+| `nCount_RNA` | low-depth 或 high-count multiplets | depth 跨样本变化 |
+| mitochondrial % | damaged/stressed cells | tissue/species baseline 不同 |
+| ribosomal/haemoglobin % | composition/contamination | 某些组织中可能是真实生物学 |
+| doublet score | two-cell droplets | rate 取决于 loading/cell count |
+| ambient-RNA estimate | soup contamination | gene/sample-specific |
+| robust outlier | multivariate anomaly | populations 分布不同 |
 
-自动标签不是 ground truth。需要结合经典 marker、cluster marker、参考映射、模型置信度、组织背景、双细胞和低质量信号。宁可保留 `unknown`/`mixed`，也不要强迫每个细胞获得过度精确的名称。
+先计算、逐 sample 可视化、定义阈值、记录保留数和排除原因，再重画同一图。没有 distribution/tissue context 的 `percent.mt < 20` 不是 QC strategy。严阈值也可能删除脆弱的真实 disease population。
 
-## 差异表达必须服从研究设计
+## 5 · Doublet 与 ambient RNA 是不同问题
 
-- cluster marker 可以使用细胞层面检验来描述 cluster；
-- 状态 marker 可作为探索性结果；
-- 多样本条件推断应聚合到 `sample × cell type`，再用样本级模型；
-- 技术数据来源对比不能解释为疾病对比。
+Doublet 是多个捕获细胞的混合；ambient RNA 是细胞外 transcripts 加到 otherwise valid droplets。Doublet calling 不等于 decontamination，decontamination 也不能发现所有 doublets。
 
-## 空间 spot 是混合物
+在 construction contract 中，应按 library 对 raw counts 做 doublet assessment，审核 lineage conflicts/scores，再判断是否做 ambient-RNA modelling。保留 original counts/checkpoint，不能用 corrected assay 覆盖证据。
 
-Visium spot 可能包含多个细胞。空间 domain、Moran 特征、邻域关系与去卷积回答不同问题。没有细胞分辨方法和适当证据时，不能把 spot 标签直接叫做细胞类型。
+## 6 · Normalization 与 integration 解决不同问题
+
+Normalization 在模型假设下提高表达可比性；integration 构建用于减少 unwanted source effect 的 representation。多样本不等于必须 integration。
+
+适合 integration：共享 populations、有明确技术变量、生物学 contrast 不等于 batch，并且可以验证 pre/post mixing 与 biology preservation。
+
+应避免/停止：condition 与 batch confounded、几乎无共享 populations、source separation 就是研究信号、correction 后 markers/trajectory 消失。
+
+必须双向验证：
+
+1. unwanted source mixing 改善；
+2. cell-type/condition neighbourhood 和 marker programmes 保持 coherent。
+
+Well-mixed UMAP 不能独立证明 integration 成功，因为 UMAP 只是所选 representation 的可视化。
+
+## 7 · Dimensions、neighbours、clusters、UMAP 不相同
+
+PCA/latent reduction 定义空间；dimension method 决定使用范围；neighbour graph 在该空间连接 cells；clustering 分割 graph；UMAP 展示 nonlinear projection。改变任一项都可能改变结果。
+
+```r
+list(
+  reduction = "pca",
+  dimensions = 1:20,
+  graph = "RNA_snn",
+  resolution = 0.4,
+  umap_seed = 20260807
+)
+```
+
+用 SCOP `RunDimsEstimate()` 提供 dimension evidence，用 `ClusterTreePlot()` 检查 resolution stability。不要只因 UMAP 好看选择 dimensions/resolution。
+
+## 8 · Cluster 不自动等于 cell type
+
+Cluster 可能表示 cell type、subtype、state、cell cycle、stress、batch、depth、doublet 或混合。因此 annotation 需要：positive marker programmes、negative evidence、cluster markers/detection、reference transfer/confidence、tissue/species、sample distribution、QC/doublet enrichment 和 uncertainty。
+
+分别保留 `cluster_id`、`annotation_candidate`、`annotation_final`、`annotation_confidence`。不要用 biological label 覆盖 cluster ID 丢失 audit trail。
+
+## 9 · Differential expression 必须服从 design
+
+| 任务 | 常见单位/模型 | 允许解释 |
+|---|---|---|
+| cluster markers | constructed object 中的 cells | 该对象内区分 cluster 的 genes |
+| exploratory state | cells，明确 exploratory | candidate state-associated genes |
+| study-level condition | pseudobulk `sample × cell type` | 有 biological replication 的 condition association |
+
+```r
+stopifnot(all(c("sample_id", "cell_type", "condition") %in% colnames(srt[[]])))
+table(srt$sample_id, srt$cell_type)
+```
+
+聚合 raw counts、保留 sample design、拟合 condition/covariates，并报告 effect + uncertainty。一百万 cells 若仅来自一位 treated 和一位 control，仍然每组一个 specimen。
+
+## 10 · Enrichment/score 继承上游假设
+
+Enrichment 不能挽救无效 DEG design。检查 input ranking/direction、identifier mapping、gene universe、database/version、coverage、与 depth/stress/cell cycle 的相关性、leading-edge genes 和 redundancy。生物学结论不能强于传入 pathway method 的 statistic。
+
+## 11 · Spatial spots 是带 coordinates 的 mixtures
+
+| 结果 | 含义 | 不等于 |
+|---|---|---|
+| spot QC | coordinate-level measurement quality | cell QC |
+| spatially variable gene | 与空间结构相关的表达 | cell-type-specific gene |
+| domain label | region/spot class | 单一 cell identity |
+| neighbourhood | 相邻 domain/spot tendency | direct molecular interaction |
+| deconvolution | reference-dependent mixture estimate | observed cell count |
+| spatial communication | expression + distance hypothesis | functional signalling proof |
+
+Coordinates 还有 scale/orientation；pixel、array row/column 与 transformed coordinates 不能静默混用。
+
+## 12 · Reproducibility 不只是 seed
+
+完整 checkpoint 包含 data checksum、object hash、sample sheet、code/commit、arguments、seed、R/package versions、optional backends/databases、result tables 和 rendered figures。Seed 不能固定外部 database update 或所有跨平台数值差异。
+
+::: {.checkpoint}
+**概念检查点**
+
+进入 downstream 前应能回答：独立单位是什么？counts 在哪个 layer？哪个变量是 technical？integration 是否 identifiable？每个 label 的证据是什么？统计模型支持什么 claim？spatial 结果是 spot-level 还是 cell-resolved？
+:::
+
+## 常见推理错误
+
+| 说法 | 错因 | 正确替换 |
+|---|---|---|
+| “50,000 cells 就有 50,000 replicates” | cells 共享 samples | 分别报告 cell count 与 independent sample count |
+| “UMAP 混合说明 Harmony 成功” | visualization 不足 | 报告 mixing 与 biology preservation |
+| “CD3D 高，所以 cluster 7 是 T cell” | 单 marker/cluster 不能证明 identity | 审核 programme、contradictions、context、reference |
+| “pathway 被激活” | transcript enrichment 是间接证据 | 写 gene programme enriched/scored |
+| “这个 Visium spot 是 macrophage” | spot 是 mixture | 写 macrophage-enriched/domain 或 deconvolution estimate |
+
+::: {.exercise}
+## 练习
+
+为项目写五行 data dictionary：`cell_barcode`、`sample_id`、`patient_id`、`condition`、`batch`。再写独立单位、counts layer、integration variable 和最强 condition claim。若 condition/batch confounded，请写“not identifiable”，不要选择算法。
+:::
+
+::: {.boundary}
+这些概念是 analysis gates。通过不保证得出生物学结论；违反则可能在所有函数都无报错时仍使结论失效。
+:::
