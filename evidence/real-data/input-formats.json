@@ -1,0 +1,20 @@
+{
+  "source": "10x Genomics PBMC 1k v3 filtered feature-barcode matrix",
+  "source_url": "https://cf.10xgenomics.com/samples/cell-exp/3.0.0/pbmc_1k_v3/pbmc_1k_v3_filtered_feature_bc_matrix.h5",
+  "h5_sha256": "8191f576550c1b449d03441b9eb098ee9f73fa82513d171ba87d31d551e3ffda",
+  "features": 33538,
+  "cells": 1222,
+  "total_umis": 9235144,
+  "validations": {
+    "h5_vs_three_file_dimensions": true,
+    "h5_vs_three_file_total_umis": true,
+    "h5_vs_rds_dimensions": true
+  },
+  "readers": {
+    "h5": "Seurat::Read10X_h5",
+    "three_file": "Seurat::Read10X",
+    "rds": "readRDS",
+    "h5ad": "scop::h5ad_to_srt (backend not installed in this runtime)",
+    "loom": "scop::loom_to_srt (backend not installed in this runtime)"
+  }
+}

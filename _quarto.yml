@@ -7,6 +7,9 @@ project:
   resources:
     - assets/social-card.svg
     - assets/social-card.png
+    - assets/figures/real-data/*.png
+    - evidence/real-data/*
+    - scripts/build-real-evidence.R
 
 website:
   title: "SCOP Learn"
@@ -23,22 +26,38 @@ website:
     foreground: "#f8fafc"
     title: "SCOP Learn"
     left:
-      - text: "Start here"
-        href: start-here.qmd
-      - text: "Concepts"
-        href: concepts.qmd
-      - text: "Cases"
+      - text: "Learn"
         menu:
-          - text: "Single-cell case"
+          - text: "Start here"
+            href: start-here.qmd
+          - text: "Dataset atlas"
+            href: datasets.qmd
+          - text: "Input formats"
+            href: input-formats.qmd
+          - text: "Core concepts"
+            href: concepts.qmd
+      - text: "Workflows"
+        menu:
+          - text: "Single sample"
             href: single-cell-case.qmd
-          - text: "Spatial case"
+          - text: "Multi-sample & cross-source"
+            href: multi-sample.qmd
+          - text: "Cell annotation"
+            href: annotation.qmd
+          - text: "Advanced analysis"
+            href: advanced.qmd
+          - text: "Spatial transcriptomics"
             href: spatial-case.qmd
-      - text: "Reproducibility"
-        href: reproducibility.qmd
-      - text: "Troubleshooting"
-        href: troubleshooting.qmd
-      - text: "Reference"
-        href: reference.qmd
+      - text: "Paper path"
+        menu:
+          - text: "Paper-scale framework"
+            href: paper-framework.qmd
+          - text: "Reproducibility"
+            href: reproducibility.qmd
+          - text: "Troubleshooting"
+            href: troubleshooting.qmd
+          - text: "Function gateway"
+            href: reference.qmd
     right:
       - text: "English"
         href: index.qmd

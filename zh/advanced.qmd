@@ -1,0 +1,99 @@
+---
+title: "进阶分析：按研究问题选择"
+description: "SCOP 的差异表达、富集、组成、轨迹、通讯、调控、代谢、恶性识别和多组学模块。"
+---
+
+# 进阶分析：按研究问题选择
+
+高级函数不是必须全部打勾的清单。只有当某模块回答预先定义的问题，而且数据满足假设时才使用。
+
+## 差异表达与富集
+
+多样本研究应按 `sample_id × cell_type` 聚合 counts，再在样本层面对 condition 建模。本站实际示范把 `panc8_sub` 聚合为 16 个 `dataset × celltype` pseudobulk，用 dataset 配对比较 beta 与 alpha。
+
+![真实 panc8 counts 的 alpha 与 beta pseudobulk 火山图。](../assets/figures/real-data/advanced-pseudobulk.png){fig-alt="edgeR pseudobulk 火山图展示八个技术来源中 beta 与 alpha 胰腺细胞的差异基因。"}
+
+真实 edgeR 路径检验了 **5,227 个基因**，其中 **527 个**满足 FDR < 0.05 且绝对 log2FC ≥ 1。这验证了强细胞类型信号；技术来源仍然不是患者重复。
+
+得到设计正确的 DEG 后再做：
+
+```r
+enrichment <- RunEnrichment(
+  geneID = significant_genes,
+  species = "Homo_sapiens",
+  db = "GO_BP"
+)
+
+gsea <- RunGSEA(
+  geneID = names(ranked_statistic),
+  geneScore = unname(ranked_statistic),
+  species = "Homo_sapiens",
+  db = "GO_BP"
+)
+```
+
+富集结果是对基因统计量的归纳，不是通路活性的直接测量。
+
+## 细胞比例
+
+每个 condition 有多个独立样本时可用：
+
+```r
+prop <- RunPropeller(
+  srt,
+  group.by = "cell_type",
+  split.by = "condition",
+  sample.by = "sample_id"
+)
+```
+
+若每组只有一个样本，不能用细胞数创造伪重复。
+
+## 轨迹与动态 {#轨迹与动态}
+
+应用场景：有生物学依据的分化、激活或恢复连续过程。
+
+```r
+paga <- RunPAGA(srt, group.by = "cell_type")
+cytotrace <- RunCytoTRACE(srt)
+```
+
+`pancreas_sub` 还含 spliced/unspliced assays，可扩展到 velocity。轨迹是排序/连通性模型，不证明一个被观察的细胞真的变成另一个细胞。
+
+## 细胞通讯
+
+```r
+chat <- RunCellChat(srt, group.by = "cell_type")
+```
+
+可得到候选 sender–receiver 通路和相互作用强度。表达推断的通讯只能提出假设，不能证明真实物理信号传递。
+
+## 调控与代谢
+
+```r
+regulons <- RunSCENIC(srt, group.by = "cell_type")
+metabolism <- RunMetabolism(srt, group.by = "cell_type")
+```
+
+SCENIC 给出候选 regulon 活性，代谢评分给出相对通路程序；二者分别不能替代 TF 结合实验或代谢物流测量，并依赖覆盖度、参考和可选后端。
+
+## 恶性与表型关联
+
+```r
+cnv <- RunCNV(srt, group.by = "cell_type")
+scissor <- RunScissor(
+  srt,
+  bulk_dataset = bulk_expression,
+  phenotype = phenotype_vector
+)
+```
+
+表达推断 CNV 需要正常参考与独立验证；Scissor 类方法需要匹配的 bulk 表型设计。不能因为数据来自肿瘤就自动运行并相信结果。
+
+## 形成一条论文故事线
+
+常见的可辩护链条是：
+
+> 细胞群比例变化 → 样本级差异程序 → 富集生物过程 → 候选调控/通讯 → 独立或空间验证
+
+当数据无法支持下一箭头时就停止。[论文框架](paper-framework.qmd)把这条链落到图、表、检查点和结论边界。

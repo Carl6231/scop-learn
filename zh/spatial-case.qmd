@@ -1,56 +1,108 @@
 ---
-title: "完整案例：空间"
-lang: zh
+title: "真实空间转录组完整流程"
+description: "在真实人 PanIN 与小鼠脑 Visium 子集上完成 spot 质控、Moran 特征、空间网络、邻域和去卷积边界。"
 ---
 
-<span class="version-chip">已执行：SCOP 0.8.9 · R 4.5.1 · 合成网格</span>
+# 真实空间转录组完整流程
 
-## 生物学原理
+本章使用两个真实 SCOP 数据集：GSM8058244 的 1,986 个 PanIN Visium spots，以及两个小鼠脑切片的 2,000 个 spots。
 
-空间分析把坐标加入表达矩阵。第一个问题不是“哪些 spot 看起来有趣”，而是“空间单位是什么、使用哪个坐标系、邻域定义是否可复现”。
-
-## 输入契约
-
-- 60 个基因 × 36 个 spot 的 6 × 6 合成网格。
-- 坐标以 `col` 和 `row` 保存于对象 metadata。
-- 一个 RNA assay，并为空间特征打分准备 normalized data。
-- 不作组织诊断或临床解释。
-
-## 工作流
+## 1 · 加载并审计坐标空间
 
 ```r
-library(Seurat)
 library(scop)
+library(Seurat)
 
-srt <- CreateSeuratObject(counts, project = "scop-learn-spatial")
-srt$col <- col
-srt$row <- row
-srt <- NormalizeData(srt, verbose = FALSE)
-srt <- RunSpatialVariableFeatures(srt, method = "moran", coord.cols = c("col", "row"), nfeatures = 10, min_spots = 5, verbose = FALSE)
-srt <- RunSpatialNetwork(srt, method = "knn", coord.cols = c("col", "row"), k = 4, verbose = FALSE)
+data(visium_human_pancreas_sub, package = "scop")
+srt <- visium_human_pancreas_sub
+DefaultAssay(srt) <- "Spatial"
+
+dim(srt)
+Images(srt)
+head(srt[[]][, c("x", "y", "sample_id", "coda_label")])
 ```
 
-完整执行脚本在[仓库中](https://github.com/Carl6231/scop-learn/blob/main/scripts/spatial-case.R)。当前本地环境没有可选 `SpatialQM` 后端，因此页面不会把它假装成已执行证据。
+必须确认坐标是原始阵列坐标、图像像素还是显示变换。本站所有空间函数统一使用 `coord.cols = c("x", "y")`。
 
-![已执行的合成空间网格空间变异特征摘要。](../assets/figures/spatial-overview.png){fig-alt="合成网格上的空间变异特征摘要" fig-cap="空间信号和 KNN 网络是合成网格的工作流证据，不是组织层面的生物学证据。"}
+## 2 · Spot 质控
 
-## 预期洞察
+```r
+srt <- RunSpotQC(
+  srt,
+  assay = "Spatial",
+  return_filtered = FALSE,
+  qc_metrics = c("umi", "gene", "mito"),
+  UMI_threshold = 0,
+  gene_threshold = 0,
+  mito_threshold = 100
+)
+```
 
-- 标准化对象保留全部 36 个 spot。
-- 空间变异特征步骤返回与坐标列绑定的排序摘要。
-- KNN 网络在对象 tools 中记录节点数、边数、活动图名称和参数。
-- 证据清单明确报告可选后端限制。
+这里的宽松参数是为了给已经整理过的教程子集计算并保留 QC 指标，不是原始组织的推荐阈值。新切片要先查看 spot 分布、tissue mask、空/背景 spots、空间边缘效应和逐切片保留率。
 
-## 解释边界
+## 3 · 归一化并寻找空间可变基因
 
-这里的空间关联是描述性的。合成网格不能证明组织区域、机制、细胞相互作用或临床结果。真实研究必须定义采样设计、坐标变换、邻域规则和重复单位。
+```r
+srt <- NormalizeData(srt, assay = "Spatial")
+srt <- RunSpatialVariableFeatures(
+  srt,
+  assay = "Spatial",
+  method = "moran",
+  coord.cols = c("x", "y"),
+  nfeatures = 100,
+  min_spots = 10,
+  seed = 20260807
+)
+head(VariableFeatures(srt), 20)
+```
 
-## 审阅清单
+真实 Moran 排名前列包括 `FBP1`、`CELA3A`、`PNLIP`、`SPP1`、`CLPS`、`CTRC`、`PRSS1`、`COL1A1`。
 
-- 确认坐标列和单位。
-- 确认空间特征打分前已经完成标准化。
-- 检查网络定义和边数。
-- 说明哪些可选后端未安装或未执行。
-- 将 spot-level 模式与 sample-level 推断分开。
+![人 PanIN 空间 domain 与最高 Moran 特征 FBP1。](../assets/figures/real-data/spatial-human-pancreas.png){fig-alt="两个组织坐标图分别展示 1,986 个真实 Visium spots 的 CoDa domain 标签与 FBP1 对数表达。"}
 
-[证据清单](../evidence/spatial-case.json) · [复现策略](reproducibility.html)
+该子集中多数 spots 标为 collagen，islet、acinar、smooth muscle、fat、epithelial 和少量 PanIN-labelled spots 位于更小区域。这仍然是 spot 层面的证据。
+
+## 4 · 构建空间图与邻域汇总
+
+```r
+srt <- RunSpatialNetwork(
+  srt,
+  method = "knn",
+  image = "slice1",
+  coord.cols = c("x", "y"),
+  k = 6,
+  graph.name = "scop_knn"
+)
+
+srt <- RunSpatialNeighborhood(
+  srt,
+  group.by = "coda_label",
+  method = "observed",
+  image = "slice1",
+  coord.cols = c("x", "y"),
+  k = 6,
+  tool_name = "coda_neighborhood"
+)
+```
+
+它回答哪些已标注 spot domains 在空间上相邻。若有多位患者，应保留 `sample.by`/`subject.by`，在独立组织之间比较，而不是把所有 spots 当重复。
+
+## 5 · 去卷积选择
+
+有匹配单细胞参考时可使用 `RunRCTD()`；具体参数应以本机 `args(scop::RunRCTD)` 为准，并明确 spatial object、reference 和 reference cell-type 字段。审计运行时没有 `spacexr`，所以本站没有伪造 RCTD 图。去卷积还要求物种、gene ID、参考细胞类型和后端兼容；domain label 不能代替细胞组成估计。
+
+## 6 · 多切片
+
+```r
+data(visium_mouse_brain_slices_sub, package = "scop")
+table(visium_mouse_brain_slices_sub$slice)
+Images(visium_mouse_brain_slices_sub)
+```
+
+![整合前的两个真实小鼠脑 Visium 切片。](../assets/figures/real-data/spatial-mouse-brain-slices.png){fig-alt="两个面板各展示矢状位前部小鼠脑切片抽样的 1,000 个 spots。"}
+
+先逐切片质控和发现空间特征，保留 `sample_id` 与各自坐标系统，再考虑 `RunSpatialIntegration()`。如果切片与生物学条件混杂，整合不能恢复缺失设计，也不能把真实区域差异校正掉。
+
+::: {.boundary}
+Visium spot 是细胞混合物。Moran 特征与邻域可以支持空间模式结论，但不能证明细胞分辨身份、真实相互作用或因果关系。
+:::

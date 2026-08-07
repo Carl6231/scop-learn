@@ -1,0 +1,6 @@
+"dataset","features","observations","assays","modality","source","tutorial_role"
+"pancreas_sub",15998,1000,"RNA;spliced;unspliced","scRNA-seq + spliced/unspliced","Bastidas-Ponce 2019 / scVelo","single sample and trajectory"
+"panc8_sub",12940,1600,"RNA","scRNA-seq, eight sources","SeuratData panc8","cross-source integration"
+"pbmcmultiome_sub",21074,500,"RNA;peaks","paired RNA + ATAC","SeuratData pbmcMultiome","annotation and multiome"
+"visium_human_pancreas_sub",5000,1986,"Spatial","Visium spatial RNA","GSE254829 / GSM8058244","human spatial case"
+"visium_mouse_brain_slices_sub",4000,2000,"Spatial","Visium spatial RNA, two slices","10x Genomics / SeuratData stxBrain","multi-slice spatial case"

@@ -1,61 +1,126 @@
 ---
-title: "完整案例：单细胞"
-lang: zh
+title: "真实单样本完整流程"
+description: "用真实 pancreas_sub 完成质控、双细胞、layers、维度、聚类稳定性、UMAP、marker 和注释核对。"
 ---
 
-<span class="version-chip">已执行：SCOP 0.8.9 · R 4.5.1 · 合成输入</span>
+# 真实单样本完整流程
 
-## 生物学原理
+本章实际运行 `scop::pancreas_sub`：真实小鼠胰腺内分泌发生子集，包含 15,998 个特征、1,000 个细胞，以及可供后续轨迹分析使用的 spliced/unspliced assays。
 
-我们使用一个带有两个明确状态的合成计数矩阵。目的在于展示工作流接口和证据记录，不是模拟患者队列或建立生物学发现。
-
-## 输入契约
-
-- 120 个基因 × 80 个细胞。
-- 一个 RNA assay 和两个明确分组。
-- 含有状态相关 marker 信号的合成 counts。
-- 不作患者、临床或治疗解释。
-
-## 工作流
+## 1 · 加载与审计
 
 ```r
-library(Seurat)
 library(scop)
+library(Seurat)
 
-srt <- CreateSeuratObject(counts, project = "scop-learn-single-cell")
-srt$group <- group
-srt <- RunCellQC(srt, qc_metrics = c("umi", "gene"), UMI_threshold = 0, gene_threshold = 0, verbose = FALSE)
-srt <- NormalizeData(srt, verbose = FALSE)
-srt <- FindVariableFeatures(srt, nfeatures = 60, verbose = FALSE)
-srt <- ScaleData(srt, features = VariableFeatures(srt), verbose = FALSE)
-srt <- RunPCA(srt, features = VariableFeatures(srt), npcs = 12, verbose = FALSE)
-srt <- FindNeighbors(srt, dims = 1:8, verbose = FALSE)
-srt <- FindClusters(srt, resolution = 0.4, verbose = FALSE)
-srt <- RunUMAP(srt, dims = 1:8, verbose = FALSE)
-estimated_dims <- RunDimsEstimate(srt, reduction = "pca", reduction_method = "scree", verbose = FALSE)
+set.seed(20260807)
+data(pancreas_sub, package = "scop")
+srt <- pancreas_sub
+DefaultAssay(srt) <- "RNA"
+
+dim(srt)
+Assays(srt)
+table(srt$CellType)
 ```
 
-完整执行脚本在[仓库中](https://github.com/Carl6231/scop-learn/blob/main/scripts/single-cell-case.R)，会写出证据记录和下方图形。
+## 2 · 先计算 QC，再检测双细胞
 
-![已执行的合成单细胞案例 UMAP。](../assets/figures/single-cell-overview.png){fig-alt="按声明状态着色的两个合成状态 UMAP" fig-cap="该图是工作流检查点，不是生物学发现；输入和输出身份在证据清单中记录。"}
+```r
+srt[["percent.mt"]] <- PercentageFeatureSet(srt, pattern = "^mt-")
+srt <- db_scDblFinder(
+  srt,
+  assay = "RNA",
+  db_rate = 0.01,
+  verbose = FALSE
+)
 
-## 预期洞察
+VlnPlot(srt, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"))
+table(srt$db.scDblFinder_class)
+```
 
-- 有意使用宽松 QC 后，对象保留 80 个细胞和 120 个基因。
-- 声明的分组信号在低维视图中仍然可见。
-- SCOP 维度估计返回建议范围，不代替检查 scree 行为或为研究选择维度。
-- 证据清单记录了生成图形时使用的包和运行时身份。
+真实观测中位数为 2,441 个检测基因、6,190 个 UMI、0.6943% 线粒体比例；`db_scDblFinder()` 标记了 21 个双细胞。
 
-## 解释边界
+![记录阈值前后真实细胞的 QC 分布。](../assets/figures/real-data/single-qc.png){fig-alt="小鼠胰腺真实细胞在质控前后的检测基因数与线粒体比例小提琴图。"}
 
-两个颜色是写入合成矩阵的标签，不是发现出来的细胞类型、治疗效应或患者群体证据。案例展示的是如何构建和检查工作流，不是如何从任意 cluster 产生结论。
+依据该数据分布固定阈值：
 
-## 审阅清单
+```r
+keep <- with(srt[[]],
+  db.scDblFinder_class == "singlet" &
+  nFeature_RNA >= 1000 & nFeature_RNA <= 5000 &
+  percent.mt < 5
+)
+srt <- subset(srt, cells = rownames(srt[[]])[keep])
+```
 
-- 检查 QC 阈值和保留细胞数。
-- 检查输入 PCA 的 assay 和 feature。
-- 检查邻居和 UMAP 使用的维度。
-- 判断 cluster 身份是否有声明标签或外部证据支持。
-- 在修改工作流前保存证据清单。
+最终保留 **979/1,000（97.9%）** 个细胞。这是本数据的可审计阈值，不是所有组织通用的默认值。
 
-[证据清单](../evidence/single-cell-case.json) · [复现策略](reproducibility.html)
+## 3 · 合并 layers 并构建低维空间
+
+```r
+srt <- JoinLayers(srt)
+srt <- NormalizeData(srt, verbose = FALSE)
+srt <- FindVariableFeatures(srt, nfeatures = 2000, verbose = FALSE)
+srt <- ScaleData(srt, features = VariableFeatures(srt), verbose = FALSE)
+srt <- RunPCA(srt, features = VariableFeatures(srt), npcs = 30, verbose = FALSE)
+```
+
+## 4 · 比较聚类分辨率
+
+```r
+srt <- FindNeighbors(srt, dims = 1:20, verbose = FALSE)
+srt <- FindClusters(srt, resolution = c(0.2, 0.4, 0.8), verbose = FALSE)
+
+ClusterTreePlot(
+  srt,
+  cluster_cols = grep("RNA_snn_res", colnames(srt[[]]), value = TRUE),
+  title = "Resolution stability on real mouse pancreas"
+)
+```
+
+![0.2、0.4 和 0.8 三个分辨率的 cluster tree。](../assets/figures/real-data/single-cluster-tree.png){fig-alt="cluster tree 展示真实胰腺数据在三个分辨率下稳定或发生分裂的 clusters。"}
+
+0.4 得到 7 个 clusters，是稳定性和解释性之间的中间选择。cluster tree 负责显示何时分裂，不会自动替你决定正确分辨率。
+
+## 5 · 估计维度并运行 UMAP
+
+```r
+dims <- RunDimsEstimate(
+  srt,
+  reduction = "pca",
+  method = "ensemble",
+  min_dims = 5,
+  verbose = FALSE
+)
+srt <- RunUMAP(srt, dims = dims, seed.use = 20260807, verbose = FALSE)
+```
+
+实际 ensemble 结果选择 **PC 1–11**。
+
+![按自带 CellType 标记的真实小鼠胰腺 UMAP。](../assets/figures/real-data/single-umap.png){fig-alt="UMAP 展示 ductal、endocrine、Ngn3-high 内分泌祖细胞、Ngn3-low 内分泌祖细胞和 pre-endocrine 细胞。"}
+
+## 6 · 找 marker 并提出注释
+
+```r
+Idents(srt) <- srt$RNA_snn_res.0.4
+markers <- FindAllMarkers(
+  srt, assay = "RNA", only.pos = TRUE,
+  min.pct = 0.2, logfc.threshold = 0.25
+)
+```
+
+只作为内部核对，把每个 cluster 映射到其中最多的自带 `CellType` 后，83.25% 的保留细胞一致。它不是独立验证，因为参照标签来自同一个对象。
+
+## 7 · 保存可续跑检查点
+
+```r
+saveRDS(srt, "checkpoints/03_clustered_pancreas.rds")
+write.csv(markers, "results/cluster_markers.csv", row.names = FALSE)
+writeLines(capture.output(sessionInfo()), "results/session-info.txt")
+```
+
+下一步可进入[细胞注释](annotation.qmd)整合 marker 与参考证据，或利用 spliced/unspliced assays 设计有生物学依据的[轨迹分析](advanced.qmd#轨迹与动态)。
+
+::: {.result-note}
+**可以支持的结论：** 真实对象通过了有记录的质控/双细胞流程，不同分辨率下存在稳定结构，并能恢复自带发育细胞类群。**不能支持的结论：** 用教程子集声称新的发育机制发现。
+:::

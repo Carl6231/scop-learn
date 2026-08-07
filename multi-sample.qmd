@@ -1,0 +1,121 @@
+---
+title: "Multi-sample and cross-source integration"
+description: "How to QC, merge, integrate, validate, and model biological multi-sample studies and cross-dataset SCOP objects."
+---
+
+# Multi-sample and cross-source integration
+
+Two situations look similar in code but support different conclusions.
+
+## Biological multi-sample design {#biological-multi-sample-design}
+
+Use this path when `sample_id` identifies independent donors, animals, or experimental units.
+
+```r
+objects <- SplitObject(merged, split.by = "sample_id")
+
+objects <- lapply(objects, function(x) {
+  x[["percent.mt"]] <- PercentageFeatureSet(x, pattern = "^MT-")
+  RunCellQC(
+    x,
+    assay = "RNA",
+    qc_metrics = c("umi", "gene", "mito", "outlier"),
+    return_filtered = FALSE
+  )
+})
+```
+
+Inspect distributions and retention by sample. A sample that loses 80% of cells is a study-level warning, not merely a cell-filtering detail.
+
+After recorded filtering and doublet calling:
+
+```r
+srt <- merge(objects[[1]], y = objects[-1], add.cell.ids = names(objects))
+srt <- JoinLayers(srt)
+srt <- SCTransform(srt, assay = "RNA", vst.flavor = "v2", verbose = FALSE)
+```
+
+Only integrate when batch/source variation is unwanted and not confounded with the biological contrast:
+
+```r
+srt <- Harmony_integrate(
+  srt_merge = srt,
+  batch = "batch",
+  assay = "SCT",
+  normalization_method = "SCT",
+  do_normalization = FALSE,
+  HVF = VariableFeatures(srt),
+  linear_reduction_dims_use = 1:20,
+  harmony_dims_use = 1:20,
+  seed = 20260807
+)
+```
+
+## Cross-source integration {#cross-source-integration}
+
+The executed case uses `panc8_sub`: 1,600 pancreatic cells, exactly 200 from each of eight public dataset sources spanning five technologies.
+
+```r
+data(panc8_sub, package = "scop")
+srt <- JoinLayers(panc8_sub)
+srt <- SCTransform(
+  srt, assay = "RNA", new.assay.name = "SCT",
+  vst.flavor = "v2", variable.features.n = 2000,
+  verbose = FALSE
+)
+
+srt <- Harmony_integrate(
+  srt_merge = srt,
+  batch = "dataset",
+  assay = "SCT",
+  normalization_method = "SCT",
+  do_normalization = FALSE,
+  do_HVF_finding = FALSE,
+  HVF = VariableFeatures(srt),
+  do_scaling = FALSE,
+  linear_reduction_dims = 30,
+  linear_reduction_dims_use = 1:20,
+  harmony_dims_use = 1:20,
+  cluster_resolution = 0.4,
+  seed = 20260807
+)
+```
+
+![Real panc8 cells before and after Harmony.](assets/figures/real-data/cross-source-integration.png){fig-alt="Three panels compare source separation before Harmony, source mixing after Harmony, and cell-type structure after Harmony."}
+
+## Validate both removal and preservation
+
+Using each cell’s 20 nearest neighbours:
+
+| Metric | Before | After |
+|---|---:|---:|
+| neighbours from another source | 0.2169 | **0.6765** |
+| neighbours with the same known cell type | 0.9379 | **0.9616** |
+
+The cluster-majority label agrees with the bundled cell type for **96.81%** of cells. Together, these checks show improved technical-source mixing without loss of the known cell-type structure in this example.
+
+## Multi-dataset merge decision
+
+| Situation | Recommended action |
+|---|---|
+| Same features, same technology, separate samples | read separately, per-sample QC, merge, then decide whether integration is needed |
+| Same tissue, different technologies | standardise feature identifiers, keep `dataset`/`tech`, integrate and validate |
+| Different tissues or incompatible biology | do not force a joint atlas; analyse separately or map to a common reference |
+| Condition completely confounded with batch | no integration method can recover the missing design; stop or narrow the claim |
+| Reference + new query | use label transfer; do not merge merely to transfer names |
+
+## Differential analysis after integration
+
+Use the integrated reduction for neighbourhoods and visualisation, but return to raw counts for pseudobulk:
+
+```r
+counts <- GetAssayData(srt, assay = "RNA", layer = "counts")
+# aggregate counts by sample_id × cell_type
+# model condition with edgeR/DESeq2 using biological samples
+```
+
+Never use the number of cells as the replicate count for a patient-level contrast.
+
+::: {.boundary}
+The eight `panc8_sub` sources are technical datasets, not eight patients. They validate integration and cell-type signal. They cannot support population-level inference.
+:::

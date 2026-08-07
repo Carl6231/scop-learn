@@ -1,0 +1,93 @@
+---
+title: "不同单细胞文件怎么读取"
+description: "10x H5、10x 三件套、RDS、H5AD、Loom 和多样本输入的可执行读取方案。"
+---
+
+# 不同单细胞文件怎么读取
+
+SCOP 不负责替代所有底层文件读取器。先用格式原生函数读取或转换成 Seurat，再进入 SCOP 流程。读取后立刻检查维度、稀疏性、feature 名称、barcode 唯一性、assay、layer 和元数据。
+
+## 10x H5 {#x-h5}
+
+```r
+library(Seurat)
+
+raw <- Read10X_h5("filtered_feature_bc_matrix.h5")
+counts <- if (is.list(raw)) raw[["Gene Expression"]] else raw
+srt <- CreateSeuratObject(counts, project = "study_name")
+
+dim(srt)
+sum(duplicated(rownames(srt)))
+sum(duplicated(colnames(srt)))
+```
+
+本站实际读取的是官方 PBMC 1k v3 H5：**33,538 个特征、1,222 个细胞、9,235,144 个 UMI**，SHA-256 为 `8191f576…ffda`。若 H5 同时含抗体或 peaks，`Read10X_h5()` 会返回 list，不能把不同模态随便拼成一张 RNA 矩阵。
+
+## 10x 三件套目录 {#x-三件套目录}
+
+同一目录必须包含相互匹配的 `matrix.mtx.gz`、`features.tsv.gz` 和 `barcodes.tsv.gz`：
+
+```r
+counts <- Read10X("filtered_feature_bc_matrix/")
+srt <- CreateSeuratObject(counts, project = "study_name")
+```
+
+不要分别读取后对其中一张表排序。本站把真实 H5 重建成三件套后，验证维度和总 UMI 完全一致。
+
+## RDS {#rds}
+
+```r
+srt <- readRDS("object.rds")
+stopifnot(inherits(srt, "Seurat"))
+dim(srt)
+Assays(srt)
+Layers(srt[[DefaultAssay(srt)]])
+head(srt[[]])
+```
+
+RDS 可能已经包含归一化、降维、图或过期的 Idents。它只是一个需要审计的对象，不是上游处理正确的证明。
+
+## H5AD 与 Loom {#h5ad-与-loom}
+
+SCOP 提供转换函数：
+
+```r
+srt_h5ad <- scop::h5ad_to_srt("object.h5ad")
+srt_loom <- scop::loom_to_srt("object.loom")
+```
+
+本站审计的运行时没有安装 `zellkonverter` 和 `loomR`，所以不伪造已执行结果。转换后至少核对：
+
+```r
+list(
+  dimensions = dim(srt_h5ad),
+  assays = Assays(srt_h5ad),
+  metadata = colnames(srt_h5ad[[]]),
+  reductions = Reductions(srt_h5ad)
+)
+```
+
+还要确认 raw counts、分类元数据、embedding、spliced/unspliced 层和稳定 feature ID 是否保留。
+
+## 多个样本
+
+逐个读取，在 merge 前写入稳定的样本级元数据：
+
+```r
+sample_dirs <- c(S01 = "data/S01/filtered_feature_bc_matrix",
+                 S02 = "data/S02/filtered_feature_bc_matrix")
+
+objects <- lapply(names(sample_dirs), function(id) {
+  x <- CreateSeuratObject(Read10X(sample_dirs[[id]]), project = id)
+  x$sample_id <- id
+  x$condition <- c(S01 = "control", S02 = "treated")[[id]]
+  x
+})
+names(objects) <- names(sample_dirs)
+
+merged <- merge(objects[[1]], y = objects[-1], add.cell.ids = names(objects))
+```
+
+质控要按样本进行；只看合并后的全局分布，会把失败样本藏在总体阈值里。
+
+实际读取函数和往返断言见[输入证据清单](../evidence/real-data/input-formats.json)与[完整证据构建脚本](../scripts/build-real-evidence.R)。

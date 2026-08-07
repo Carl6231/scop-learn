@@ -1,0 +1,46 @@
+---
+title: "Dataset atlas"
+description: "The real datasets used in SCOP Learn, their provenance, assays, sizes, and teaching roles."
+---
+
+# Dataset atlas
+
+The main curriculum uses five real datasets bundled with SCOP plus one public 10x H5. Synthetic data is not primary teaching evidence.
+
+| Dataset | Shape | Assays / modality | Role |
+|---|---:|---|---|
+| `pancreas_sub` | 15,998 × 1,000 | RNA, spliced, unspliced | single-sample QC, clustering, trajectory-ready object |
+| `panc8_sub` | 12,940 × 1,600 | RNA; 8 dataset sources | cross-source integration and pseudobulk demonstration |
+| `pbmcmultiome_sub` | 21,074 × 500 | RNA + peaks | manual markers, label transfer, CellTypist, multiome choices |
+| `visium_human_pancreas_sub` | 5,000 × 1,986 | Spatial; one tissue image | PanIN spot QC, Moran features, network and neighbourhood analysis |
+| `visium_mouse_brain_slices_sub` | 4,000 × 2,000 | Spatial; two slices | multi-slice audit and integration decisions |
+| 10x PBMC 1k v3 H5 | 33,538 × 1,222 | filtered gene expression matrix | raw-file reading and round-trip validation |
+
+## Load and audit bundled data
+
+```r
+library(scop)
+library(Seurat)
+
+data(pancreas_sub, package = "scop")
+dim(pancreas_sub)
+Assays(pancreas_sub)
+colnames(pancreas_sub[[]])
+table(pancreas_sub$CellType)
+```
+
+Run the same audit for every object. The printed metadata columns define which questions are answerable. For example, `panc8_sub$dataset` is a technical-source label; it is not a patient identifier.
+
+## Provenance and appropriate use
+
+- `pancreas_sub` is derived from mouse pancreatic endocrinogenesis data distributed through scVelo.
+- `panc8_sub` combines eight human pancreatic-islet dataset sources distributed through SeuratData.
+- `pbmcmultiome_sub` is a real paired PBMC RNA/ATAC subset distributed through SeuratData.
+- `visium_human_pancreas_sub` is derived from PanIN sample GSM8058244 in GSE254829.
+- `visium_mouse_brain_slices_sub` is derived from two 10x Genomics sagittal anterior mouse-brain slices.
+
+These are teaching and regression-test datasets. Re-running them validates a workflow; it does not create an independent cohort or a new publication claim.
+
+## Machine-readable inventory
+
+The generated [dataset catalog](evidence/real-data/dataset-catalog.csv) and [runtime manifest](evidence/real-data/runtime.json) are the audit sources for the table above.

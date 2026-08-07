@@ -1,0 +1,46 @@
+{
+  "dataset": "panc8_sub",
+  "cells": 1600,
+  "genes": 12506,
+  "datasets": {
+    "celseq": 200,
+    "celseq2": 200,
+    "fluidigmc1": 200,
+    "indrop1": 200,
+    "indrop2": 200,
+    "indrop3": 200,
+    "indrop4": 200,
+    "smartseq2": 200
+  },
+  "technologies": {
+    "celseq": 200,
+    "celseq2": 200,
+    "fluidigmc1": 200,
+    "indrop": 800,
+    "smartseq2": 200
+  },
+  "workflow": ["JoinLayers", "SCTransform", "Harmony_integrate", "RunDimsEstimate"],
+  "reductions": ["Harmonypca", "Harmony", "HarmonyUMAP2D", "SourceUMAP"],
+  "estimated_dims": [1, 2, 3, 4, 5, 6, 7],
+  "neighborhood_metrics": {
+    "before": {
+      "source_mixing": 0.2169,
+      "celltype_preservation": 0.9379
+    },
+    "after": {
+      "source_mixing": 0.6765,
+      "celltype_preservation": 0.9616
+    }
+  },
+  "cluster_majority_accuracy_against_known_celltype": 0.9681,
+  "figure": {
+    "path": "assets/figures/real-data/cross-source-integration.png",
+    "sha256": "23ec7e75bddf168aa5280390eeab999f5ee8e1474e6f963fe810daae1d5dbee7"
+  },
+  "checkpoint": {
+    "path": "artifacts/real-data/checkpoints/cross-source-panc8.rds",
+    "sha256": "069df5c99bce736f8b6ffda2dac36c23496308cfaf70e6d457f708122da4d247",
+    "bytes": 163040900
+  },
+  "claim_boundary": "The eight dataset labels are technical sources, not eight biological replicates; mixing and label preservation diagnose integration only."
+}

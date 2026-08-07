@@ -1,77 +1,67 @@
 ---
-lang: zh
-pagetitle: "SCOP Learn"
+title: "SCOP Learn：用真实数据完成单细胞与空间分析"
+description: "基于 SCOP 0.8.9 自带真实数据集和公开 10x H5 文件的可执行双语教程。"
 ---
 
 ::: {.hero-learn}
-<div class="eyebrow">SCOP Learn · 有来源的课程</div>
+<div class="eyebrow">真实数据 · 完整复现 · 明确结论边界</div>
 
-# 从原理到可复现结果。
+# 从原始文件走到论文级 SCOP 分析
 
-SCOP Learn 是面向 SCOP R 包的双语教学站。每篇课程都保持同样的节奏：生物学原理、R 代码、预期洞察、解释边界和复现来源。
+系统学习 H5、10x 三件套、RDS、H5AD 和 Loom 的读取；单样本与多样本质控；跨数据来源整合；细胞注释；高级分析；空间转录组。主教程中的每张结果图都由真实数据实际运行得到，不再用合成数据代替生物学结果。
 
-<span class="version-chip">已在本地用 SCOP 0.8.9 验证</span>
+[开始学习](start-here.qmd){.btn .btn-primary} [English](../index.qmd){.btn .btn-outline-light}
 :::
 
-::: {.grid .gap-4 .mb-5}
+<div class="proof-strip">
+<div class="proof-item"><strong>5 个</strong>SCOP 自带真实数据集</div>
+<div class="proof-item"><strong>1,222</strong>个公开 10x H5 细胞</div>
+<div class="proof-item"><strong>8 张</strong>已实际检查的真实结果图</div>
+<div class="proof-item"><strong>314 个</strong>SCOP 0.8.9 导出函数</div>
+</div>
+
+## 教程主线
+
+::: {.grid}
 ::: {.g-col-12 .g-col-md-4}
 ::: {.lesson-card}
-## 先建立地图
+### 01 · 正确读取数据
 
-[按照学习路径](start-here.html) 从输入和对象结构走到完整分析。
+根据 H5、10x 三件套、RDS、H5AD 或 Loom 选择读取函数，并对公开 PBMC 1k H5 做真实往返验证。
+
+[读取不同格式 →](input-formats.qmd)
 :::
 :::
 ::: {.g-col-12 .g-col-md-4}
 ::: {.lesson-card}
-## 理解组件
+### 02 · 构建可信对象
 
-[阅读核心概念](concepts.html)，理解 assay、layer、reduction、metadata 和证据。
+先观察分布再定阈值，检测双细胞，处理 Seurat v5 layers，检查聚类稳定性，并由数据估计维度。
+
+[单样本流程 →](single-cell-case.qmd)
 :::
 :::
 ::: {.g-col-12 .g-col-md-4}
 ::: {.lesson-card}
-## 完成两个案例
+### 03 · 扩展到完整研究
 
-[单细胞](single-cell-case.html)和[空间](spatial-case.html)案例均在本地真实执行并附带来源记录。
+保留样本身份，整合技术来源，验证生物学信号没有被抹掉，完成证据化注释，并用 pseudobulk 进行样本层面的推断。
+
+[多样本与跨来源 →](multi-sample.qmd)
 :::
 :::
 :::
 
-## 使用方法
+## 本站真实运行得到了什么
 
-1. 先读生物学问题，再复制代码。
-2. 确认输入符合课程契约。
-3. 先运行最小检查点。
-4. 将结果与预期洞察比较，不要只追求漂亮截图。
-5. 记录包、R、数据和环境身份。
+![真实胰腺细胞在 SCT 与 Harmony 整合前后的结果。](../assets/figures/real-data/cross-source-integration.png){fig-alt="三幅 UMAP 依次展示 Harmony 前的数据来源分离、Harmony 后的数据来源混合，以及 Harmony 后保留的细胞类型结构。"}
 
-::: {.grid .gap-4}
-::: {.g-col-12 .g-col-md-6}
-::: {.case-card}
-## 完整单细胞案例
+在 `panc8_sub` 中，20 个近邻里来自其他技术来源的比例由 **0.2169 提高到 0.6765**，同一已知细胞类型的近邻比例由 **0.9379 提高到 0.9616**。这能证明该整合流程在此数据上有效，但不能把技术数据来源冒充为生物学重复。
 
-使用合成双状态计数矩阵完成 QC、标准化、可变特征、PCA、邻居、聚类、UMAP 和维度估计。
+## 如何支撑一篇完整论文
 
-[打开案例 →](single-cell-case.html)
-:::
-:::
-::: {.g-col-12 .g-col-md-6}
-::: {.case-card}
-## 完整空间案例
-
-使用合成空间网格完成标准化、空间变异特征打分和 KNN 空间网络。
-
-[打开案例 →](spatial-case.html)
-:::
-:::
-:::
+[论文级分析框架](paper-framework.qmd)把输入、质控、整合、注释、差异、富集、组成、轨迹、通讯、调控、代谢、恶性识别与空间验证组织成围绕研究问题的连续证据链。任何未实际运行成功的可选后端都不会被写成“已经完成”。
 
 ::: {.boundary}
-SCOP Learn 教授可复现的包使用方法，不会把探索性的细胞级或 spot 级模式扩展成临床、患者级或因果结论。
+**证据边界：** 本站证明的是特定数据、函数和运行时上的可复现流程，不代表每种方法都适合所有研究，也不把教程数据的重分析包装成新的生物学发现。
 :::
-
-## 区分三个来源
-
-- [SCOP API Reference](https://mengxu98.github.io/scop/reference/) — 上游函数级参考。
-- [SCOP Studio](https://carl6231.github.io/scop-studio-site/) — 独立的产品和本地工作流站点。
-- [复现说明](reproducibility.html) — 本站案例的版本、数据、环境和制品记录。

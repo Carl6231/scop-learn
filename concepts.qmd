@@ -1,37 +1,47 @@
 ---
-title: "Core concepts"
+title: "Core concepts before code"
+description: "The sample, layer, integration, annotation, and inference concepts that prevent invalid single-cell conclusions."
 ---
 
-## Object, assay, layer
+# Core concepts before code
 
-A Seurat object is the container for expression matrices, metadata, reductions, graphs, images, commands, and provenance. The assay says what measurement family is active; a layer says which matrix representation is being used. A function can be syntactically valid and still be scientifically wrong if it reads the wrong assay or layer.
+## Cells are observations; samples are experimental units
 
-## QC is a decision, not a decorative plot
+A matrix may contain 100,000 cells but only six patients. For a treatment or disease contrast, the effective replication is usually six biological samples—not 100,000 independent cells. Keep `sample_id`, `patient_id`, and `condition` throughout the object.
 
-Quality control should expose library size, detected features, mitochondrial/ribosomal content, doublet evidence, and any study-specific exclusion rule. Save the thresholds and the number of retained observations.
+## QC is a distributional decision
 
-## Reduction and neighbors are different questions
+Compute QC metrics first, view them per sample, then choose and record thresholds. Mitochondrial percentage, detected genes, UMI count, doublet score, ambient RNA, and outlier rules answer different failure modes. A universal `percent.mt < 20` line is not a quality-control strategy.
 
-PCA or another linear reduction summarizes variation. A neighbor graph encodes local relationships. UMAP is a visualization of a chosen neighborhood structure, not a replacement for checking the graph or the input assumptions.
+## Seurat v5 layers must be deliberate
 
-## Integration has a trade-off
+Merged objects can retain split layers. Join them before functions that expect one counts/data layer:
 
-Integration can reduce technical separation, but it can also erase biology if the design is poorly specified. Always compare an integrated view with an uncorrected view and record the grouping variable used for correction.
+```r
+srt <- JoinLayers(srt)
+Layers(srt[[DefaultAssay(srt)]])
+```
 
-## Annotation is evidence assembly
+## Integration is a correction with a risk
 
-A marker list is not a cell identity by itself. Annotation combines markers, negative markers, reference knowledge, sample context, and uncertainty. A tutorial should show the evidence used for each label.
+Integration aims to reduce unwanted source variation while preserving biology. Validate both sides:
 
-## Downstream questions
+- **source mixing** should improve when source is unwanted;
+- **cell-type or condition structure** should remain coherent;
+- markers should remain biologically interpretable;
+- the target biological contrast must not be supplied as the batch variable.
 
-| Question | Typical evidence | Boundary |
-|---|---|---|
-| Composition | proportions by sample or condition | cell counts are not independent biological replicates |
-| Differential expression | model with design-aware replication | a cell-level p-value is not automatically a study-level result |
-| Enrichment | ranked genes and a declared universe | pathway labels depend on database and background |
-| Trajectory | graph or pseudotime under explicit assumptions | pseudotime is not a measured time course |
-| Spatial organization | coordinates, neighborhood, and local signal | spatial association is not mechanism |
+## Annotation is evidence synthesis
 
-## Read the upstream reference
+No single automated label is ground truth. Combine canonical markers, cluster markers, reference mapping, model confidence, tissue context, and doublet/low-quality signals. Keep uncertain and mixed labels instead of forcing every cell into a confident class.
 
-Use the [SCOP API Reference](https://mengxu98.github.io/scop/reference/) for the exact function signature and arguments. This site is a learning layer, not a second generated reference.
+## Differential expression follows the design
+
+- Cluster markers explain a cluster and may use cell-level tests.
+- Exploratory state markers compare cells and must be labelled exploratory.
+- Study-level condition inference should aggregate counts to `sample × cell type` and fit a sample-level model.
+- A dataset-source contrast is not a disease contrast.
+
+## Spatial spots are mixtures
+
+Visium spots can contain several cells. Spatial domains, Moran features, neighbourhood associations, and deconvolution have different interpretations. Do not call a spot-level label a cell type without a cell-resolved method and appropriate evidence.

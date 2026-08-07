@@ -1,0 +1,100 @@
+---
+title: "Advanced analysis by research question"
+description: "SCOP advanced modules for differential expression, enrichment, composition, trajectory, communication, regulation, metabolism, malignancy, and multiome analysis."
+---
+
+# Advanced analysis by research question
+
+Advanced functions are not a checklist. Select a module because it answers a predefined question and because its assumptions match the data.
+
+## Differential expression and enrichment
+
+For multi-sample studies, aggregate counts by `sample_id × cell_type`, then fit the condition at sample level. The executed demonstration uses 16 `dataset × celltype` pseudobulks from `panc8_sub` to contrast beta and alpha cells with dataset pairing.
+
+![Pseudobulk alpha versus beta volcano plot on real panc8 counts.](assets/figures/real-data/advanced-pseudobulk.png){fig-alt="Volcano plot shows edgeR pseudobulk genes differing between beta and alpha pancreatic cells across eight technical data sources."}
+
+The real edgeR path tested **5,227 genes** and found **527** with FDR < 0.05 and absolute log2 fold change ≥ 1. This verifies strong cell-type signal; technical dataset sources are not patient replicates.
+
+```r
+# after a valid sample-level DEG table exists
+enrichment <- RunEnrichment(
+  geneID = significant_genes,
+  species = "Homo_sapiens",
+  db = "GO_BP"
+)
+
+gsea <- RunGSEA(
+  geneID = names(ranked_statistic),
+  geneScore = unname(ranked_statistic),
+  species = "Homo_sapiens",
+  db = "GO_BP"
+)
+```
+
+Interpret pathways as summaries of a gene statistic, not as direct measurements of pathway activity.
+
+## Cell proportions
+
+Use `RunPropeller()` or `RunProportionTest()` when each condition has multiple independent samples:
+
+```r
+prop <- RunPropeller(
+  srt,
+  group.by = "cell_type",
+  split.by = "condition",
+  sample.by = "sample_id"
+)
+```
+
+Do not invent pseudo-replication from cells when only one sample exists per condition.
+
+## Trajectory and dynamics {#trajectory-and-dynamics}
+
+Application: differentiation, activation, or recovery where a continuous process is biologically plausible.
+
+```r
+paga <- RunPAGA(srt, group.by = "cell_type")
+cytotrace <- RunCytoTRACE(srt)
+```
+
+`pancreas_sub` also carries spliced/unspliced assays, making it suitable for a velocity-aware extension. A trajectory is an ordering model, not proof that one observed cell becomes another.
+
+## Cell–cell communication
+
+Application: generate ligand–receptor hypotheses between defined cell populations.
+
+```r
+chat <- RunCellChat(srt, group.by = "cell_type")
+```
+
+Expected output: candidate sender–receiver pathways and interaction strengths. Required boundary: expression-based communication is hypothesis generation, not proof of physical signalling.
+
+## Regulation and metabolism
+
+```r
+regulons <- RunSCENIC(srt, group.by = "cell_type")
+metabolism <- RunMetabolism(srt, group.by = "cell_type")
+```
+
+Use SCENIC for candidate regulon activity and metabolism scoring for relative pathway programmes. Both depend on gene coverage, references, and optional backends; they do not directly measure TF binding or metabolite flux.
+
+## Malignancy and phenotype association
+
+```r
+cnv <- RunCNV(srt, group.by = "cell_type")
+scissor <- RunScissor(
+  srt,
+  bulk_dataset = bulk_expression,
+  phenotype = phenotype_vector
+)
+```
+
+CNV-like expression patterns require normal references and careful validation. Scissor-like phenotype association requires aligned bulk phenotype inputs. Neither should be run merely because a tumour dataset exists.
+
+## A coherent paper story
+
+A defensible analysis often follows one chain:
+
+> cell population change → sample-level differential programme → enriched biological processes → candidate regulator or interaction → orthogonal/spatial validation
+
+Stop when the data cannot support the next arrow. The [paper framework](paper-framework.qmd) turns this chain into figures, tables, and checkpoints.

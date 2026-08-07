@@ -1,0 +1,52 @@
+{
+  "human_pancreas": {
+    "dataset": "visium_human_pancreas_sub",
+    "spots": 1986,
+    "genes": 5000,
+    "image": "slice1",
+    "labels": {
+      "acini": 81,
+      "collagen": 1644,
+      "fat": 15,
+      "islets": 94,
+      "normal epithelium": 32,
+      "panin": 2,
+      "smooth muscle": 118
+    },
+    "top_moran_features": ["FBP1", "CELA3A", "PNLIP", "SPP1", "CLPS", "CTRC", "PRSS1", "COL1A1", "PLA2G1B", "CTRB1", "GCG", "CEL", "CPB1", "CPA2", "SPINK1", "TTR", "FOSB", "CFTR", "CPA1", "KRT8"]
+  },
+  "mouse_brain": {
+    "dataset": "visium_mouse_brain_slices_sub",
+    "spots": 2000,
+    "genes": 4000,
+    "slices": {
+      "1": 1000,
+      "2": 1000
+    },
+    "regions": {
+      "anterior": 2000
+    }
+  },
+  "workflow": ["RunSpotQC", "NormalizeData", "RunSpatialVariableFeatures(method='moran')", "RunSpatialNetwork", "RunSpatialNeighborhood(method='observed')"],
+  "figures": {
+    "human_pancreas": {
+      "path": "assets/figures/real-data/spatial-human-pancreas.png",
+      "sha256": "840348db84c940a4dac94af433ed078117a61b4e01833ed0e919a8aa9c63d0be"
+    },
+    "mouse_brain": {
+      "path": "assets/figures/real-data/spatial-mouse-brain-slices.png",
+      "sha256": "af15731bfdb487558cfa3fc75093ef58f5f9acda4fe59930c14654529671260b"
+    }
+  },
+  "checkpoint": {
+    "path": "artifacts/real-data/checkpoints/spatial-human-pancreas.rds",
+    "sha256": "77a9d4b42347079b17bfbf3f377f68eaa8ae175ca4ebf4845e42418d5de28a4f",
+    "bytes": 15906073
+  },
+  "deconvolution": {
+    "executed": false,
+    "method": "RunRCTD",
+    "reason": "spacexr is not installed in the audited runtime; no deconvolution result is fabricated."
+  },
+  "claim_boundary": "Visium spots are mixtures. Domain and Moran results are spot-level spatial patterns, not cell-resolved identities."
+}

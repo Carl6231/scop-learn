@@ -1,0 +1,55 @@
+{
+  "dataset": "pancreas_sub",
+  "source": "Bastidas-Ponce et al. 2019 / scVelo",
+  "before": {
+    "cells": 1000,
+    "genes": 15998,
+    "doublets": 21,
+    "qc": {
+      "nFeature_median": 2441,
+      "nCount_median": 6190,
+      "percent_mt_median": 0.6943
+    }
+  },
+  "after": {
+    "cells": 979,
+    "retained_percent": 97.9,
+    "cell_types": {
+      "Ductal": 253,
+      "Endocrine": 341,
+      "Ngn3-high-EP": 169,
+      "Ngn3-low-EP": 63,
+      "Pre-endocrine": 153
+    }
+  },
+  "thresholds": {
+    "nFeature_RNA": [1000, 5000],
+    "percent_mt_max": 5,
+    "doublet_class": "singlet"
+  },
+  "estimated_dims": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
+  "dims_used": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
+  "final_cluster_column": "RNA_snn_res.0.4",
+  "clusters": 7,
+  "cluster_majority_accuracy_against_known_CellType": 0.8325,
+  "figures": {
+    "qc": {
+      "path": "assets/figures/real-data/single-qc.png",
+      "sha256": "7088a8b44d7de0e282ea2a9d89331c33a4a202071bd9da54b759ada2b82bbfdd"
+    },
+    "umap": {
+      "path": "assets/figures/real-data/single-umap.png",
+      "sha256": "6139130c8a91feb5f84113aa6e1eb07d9d39476b380bb2258a211ea46e0e2786"
+    },
+    "cluster_tree": {
+      "path": "assets/figures/real-data/single-cluster-tree.png",
+      "sha256": "a54aee0d086341447a17c89453b2e443ee6de9768d46b46e73a395f197c519b3"
+    }
+  },
+  "checkpoint": {
+    "path": "artifacts/real-data/checkpoints/single-pancreas.rds",
+    "sha256": "1746374127adb2ec10870aa7e98c71f3e8d23d14d1ef794369ff784dd08dd79f",
+    "bytes": 31676176
+  },
+  "claim_boundary": "Cluster-majority accuracy is an internal concordance check against bundled labels, not independent biological validation."
+}

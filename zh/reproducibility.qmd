@@ -1,38 +1,58 @@
 ---
-title: "复现策略"
-lang: zh
+title: "复现本站真实结果"
+description: "SCOP Learn 的精确运行时、seed、H5 哈希、检查点、证据清单、结果图和重建命令。"
 ---
 
-## 版本锁定
+# 复现本站真实结果
 
-首批案例在本地使用以下环境执行：
+## 已审计运行时
 
 - R 4.5.1
 - SCOP 0.8.9
-- 已安装环境中的 Seurat 和 ggplot2
-- Quarto 1.10.18
-- 使用固定随机种子生成的合成输入
+- Seurat 5.5.0
+- seed `20260807`
+- SCOP namespace 导出函数 314 个
 
-上游参考可能描述不同版本。因此每个案例都声明目标版本，构建过程再单独记录当前网站提交。
+包版本与可选后端状态见 [runtime.json](../evidence/real-data/runtime.json)，完整 session 输出见 [session-info.txt](../evidence/real-data/session-info.txt)。
 
-## 证据清单
+## 一次性重建
 
-每个完整案例保存 JSON 清单，包含案例范围、数据维度和随机种子、包版本、工作流函数、结果摘要、图形哈希和已知限制。这些清单不能替代真实研究的全套来源记录，但可以让教程声明被复核。
-
-## 构建策略
-
-- 静态内容在 GitHub Actions 中渲染。
-- 案例脚本由维护者有意执行，并在发布前检查实际输出。
-- 重型或可选后端如果没有在 Pages 构建中重新执行，会明确标记。
-- CI 不下载私有数据，也不依赖本地绝对路径。
-- 每次站点发布都能追溯到 Git 提交和 Quarto 版本。
-
-## 本地重跑
+在仓库根目录：
 
 ```bash
-Rscript scripts/single-cell-case.R
-Rscript scripts/spatial-case.R
+mkdir -p artifacts/real-data/input
+curl -L --fail \
+  -o artifacts/real-data/input/pbmc_1k_v3_filtered_feature_bc_matrix.h5 \
+  https://cf.10xgenomics.com/samples/cell-exp/3.0.0/pbmc_1k_v3/pbmc_1k_v3_filtered_feature_bc_matrix.h5
+
+Rscript scripts/build-real-evidence.R
 quarto render
 ```
 
-推送 `main` 之前检查真实 PNG 和生成的 HTML。
+预期 H5 SHA-256：
+
+```text
+8191f576550c1b449d03441b9eb098ee9f73fa82513d171ba87d31d551e3ffda
+```
+
+## 证据链
+
+[顶层 manifest](../evidence/real-data/manifest.json)对 7 个组件清单和所有真实结果图进行哈希，并断言：H5→三件套与 H5→RDS 往返一致；单样本保留细胞 >900；跨来源对象确实产生 Harmony reduction；pseudobulk 结果非空；Moran 排名特征至少 20 个；主证据没有使用合成数据。
+
+大型 RDS 检查点在本地 `artifacts/` 下重建，故意不提交到 Git；组件清单保存其 SHA-256 与字节数。
+
+## 哪些可固定，哪些依赖外部环境
+
+R seed 固定本站使用的随机步骤，但平台与依赖版本仍可能造成浮点或 UMAP 坐标差异。CellTypist 还依赖 Python 环境和 `Immune_All_Low.pkl`；证据清单记录了实际模型和结果摘要。
+
+## 证据文件
+
+- [输入格式](../evidence/real-data/input-formats.json)
+- [单样本](../evidence/real-data/single-sample.json)
+- [跨来源](../evidence/real-data/cross-source.json)
+- [注释](../evidence/real-data/annotation.json)
+- [高级分析](../evidence/real-data/advanced.json)
+- [空间](../evidence/real-data/spatial.json)
+- [完整构建脚本](../scripts/build-real-evidence.R)
+
+旧合成案例仅保留为代码级 smoke test，不再作为教程生物学证据。

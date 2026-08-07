@@ -21,6 +21,20 @@ body {
 .version-chip { display: inline-flex; padding: 0.3rem 0.6rem; border-radius: 999px; color: #17445c; background: #dff1fa; font-size: 0.78rem; font-weight: 750; }
 .boundary { padding: 1rem 1.15rem; border-left: 4px solid #d97745; background: #fff4ec; }
 .figure-caption { color: #526276; font-size: 0.9rem; }
+.proof-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); gap: 0.8rem; margin: 1.2rem 0 2rem; }
+.proof-item { padding: 1rem; border: 1px solid #cbd7e4; border-radius: 0.9rem; background: #fff; }
+.proof-item strong { display: block; color: #0e7490; font-size: 1.35rem; }
+.workflow-map { margin: 1.25rem 0; padding: 1.15rem; border: 1px solid #d8e2ec; border-radius: 1rem; background: #eef5f8; }
+.decision-table td:first-child { font-weight: 700; white-space: nowrap; }
+.result-note { margin: 1rem 0; padding: 1rem 1.15rem; border-left: 4px solid #0e7490; background: #edf8fa; }
+.status-ok { color: #166534; font-weight: 750; }
+.status-blocked { color: #9a3412; font-weight: 750; }
+.chapter-nav { display: flex; flex-wrap: wrap; gap: 0.55rem; margin: 1rem 0 2rem; }
+.chapter-nav a { padding: 0.45rem 0.7rem; border: 1px solid #cbd7e4; border-radius: 999px; background: #fff; text-decoration: none; }
+.callout-note, .callout-warning, .callout-important { border-radius: 0.75rem; }
+pre.sourceCode { border: 1px solid #dce4ec; border-radius: 0.75rem; }
+table { background: #fff; }
+img { border-radius: 0.75rem; }
 
 @media (max-width: 700px) {
   .hero-learn { margin-right: -0.75rem; margin-left: -0.75rem; border-radius: 0 0 1.25rem 1.25rem; }

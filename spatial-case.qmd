@@ -1,68 +1,120 @@
 ---
-title: "Complete case: spatial"
+title: "Real spatial transcriptomics workflow"
+description: "A complete SCOP spatial workflow on real human PanIN and mouse-brain Visium subsets, including spot QC, Moran features, spatial networks, neighbourhoods, and deconvolution boundaries."
 ---
 
-<span class="version-chip">Executed: SCOP 0.8.9 · R 4.5.1 · synthetic grid</span>
+# Real spatial transcriptomics workflow
 
-## Biological rationale
+This chapter uses two real SCOP datasets: 1,986 human PanIN Visium spots from GSM8058244 and 2,000 spots across two mouse-brain slices.
 
-Spatial analysis adds coordinates to expression. The first question is not “which spots look interesting?” but “what is the spatial unit, which coordinate system is being used, and what neighborhood definition is reproducible?”
-
-## Input contract
-
-- 60 genes × 36 spots on a 6 × 6 synthetic grid.
-- Coordinates are stored as `col` and `row` in the object metadata.
-- One RNA assay with normalized data for spatial feature scoring.
-- No tissue diagnosis or clinical interpretation.
-
-## Workflow
+## 1 · Load and audit coordinate space
 
 ```r
-library(Seurat)
 library(scop)
+library(Seurat)
 
-srt <- CreateSeuratObject(counts, project = "scop-learn-spatial")
-srt$col <- col
-srt$row <- row
-srt <- NormalizeData(srt, verbose = FALSE)
-srt <- RunSpatialVariableFeatures(
+data(visium_human_pancreas_sub, package = "scop")
+srt <- visium_human_pancreas_sub
+DefaultAssay(srt) <- "Spatial"
+
+dim(srt)
+Images(srt)
+head(srt[[]][, c("x", "y", "sample_id", "coda_label")])
+```
+
+Confirm whether coordinates are raw array coordinates, image pixels, or a display transform. The published workflow uses `coord.cols = c("x", "y")` consistently.
+
+## 2 · Spot QC
+
+```r
+srt <- RunSpotQC(
   srt,
-  method = "moran",
-  coord.cols = c("col", "row"),
-  nfeatures = 10,
-  min_spots = 5,
-  verbose = FALSE
-)
-srt <- RunSpatialNetwork(
-  srt,
-  method = "knn",
-  coord.cols = c("col", "row"),
-  k = 4,
-  verbose = FALSE
+  assay = "Spatial",
+  return_filtered = FALSE,
+  qc_metrics = c("umi", "gene", "mito"),
+  UMI_threshold = 0,
+  gene_threshold = 0,
+  mito_threshold = 100
 )
 ```
 
-The complete executed script is [available in the repository](https://github.com/Carl6231/scop-learn/blob/main/scripts/spatial-case.R). The optional `SpatialQM` backend is not part of this local environment, so it is not silently presented as executed evidence.
+Those permissive values compute and retain metrics for the bundled teaching subset; they are not recommended thresholds for raw tissue. For a new slide, inspect spot distributions, tissue mask, empty/background spots, spatial edge effects, and per-slice retention before filtering.
 
-![Spatially variable feature summary from the executed synthetic grid.](assets/figures/spatial-overview.png){fig-alt="Spatial variable feature summary over a synthetic grid" fig-cap="The spatial signal and KNN network are workflow evidence for the synthetic grid, not tissue-level biological evidence."}
+## 3 · Normalise and find spatially variable genes
 
-## Expected insights
+```r
+srt <- NormalizeData(srt, assay = "Spatial")
+srt <- RunSpatialVariableFeatures(
+  srt,
+  assay = "Spatial",
+  method = "moran",
+  coord.cols = c("x", "y"),
+  nfeatures = 100,
+  min_spots = 10,
+  seed = 20260807
+)
+head(VariableFeatures(srt), 20)
+```
 
-- All 36 spots are retained in the normalized object.
-- The spatial-variable-feature step returns a ranked feature summary tied to the coordinate columns.
-- The KNN network records its node count, edge count, active graph name, and parameters in the object tools.
-- The evidence manifest reports the optional-backend limitation explicitly.
+The top real Moran features include `FBP1`, `CELA3A`, `PNLIP`, `SPP1`, `CLPS`, `CTRC`, `PRSS1`, and `COL1A1`.
 
-## Interpretation boundary
+![Human PanIN spatial domains and the top Moran feature FBP1.](assets/figures/real-data/spatial-human-pancreas.png){fig-alt="Two tissue-coordinate panels show CoDa domain labels and FBP1 log expression across 1,986 real Visium spots."}
 
-Spatial association is descriptive here. The synthetic grid does not establish a tissue region, mechanism, cell-cell interaction, or clinical result. A real study must define the sampling design, coordinate transformation, neighborhood rule, and replication unit.
+Most spots are labelled collagen in this subset, while islet, acinar, smooth-muscle, fat, epithelial, and rare PanIN-labelled spots occupy smaller regions. The plot is spot-level evidence.
 
-## Review checklist
+## 4 · Build the spatial graph and neighbourhood summary
 
-- Confirm the coordinate columns and their units.
-- Confirm that normalization occurred before spatial feature scoring.
-- Inspect the network definition and edge count.
-- State which optional backends were unavailable or not run.
-- Separate spot-level patterns from sample-level inference.
+```r
+srt <- RunSpatialNetwork(
+  srt,
+  method = "knn",
+  image = "slice1",
+  coord.cols = c("x", "y"),
+  k = 6,
+  graph.name = "scop_knn"
+)
 
-[Evidence manifest](evidence/spatial-case.json) · [Reproducibility policy](reproducibility.qmd)
+srt <- RunSpatialNeighborhood(
+  srt,
+  group.by = "coda_label",
+  method = "observed",
+  image = "slice1",
+  coord.cols = c("x", "y"),
+  k = 6,
+  tool_name = "coda_neighborhood"
+)
+```
+
+Application: describe which labelled spot domains lie next to one another. With multiple patients, carry `sample.by`/`subject.by` through and model associations across independent tissues.
+
+## 5 · Deconvolution choices
+
+If a matched single-cell reference exists, SCOP exposes `RunRCTD()`:
+
+```r
+rctd <- RunRCTD(
+  srt = srt,
+  reference = reference,
+  reference_label = "cell_type",
+  coord.cols = c("x", "y"),
+  rctd_mode = "full"
+)
+```
+
+The audited runtime lacks `spacexr`, so no RCTD result is shown. Deconvolution requires compatible species, gene identifiers, reference cell types, and a functioning backend. A domain label is not a substitute for cell-composition estimation.
+
+## 6 · Multiple slides
+
+```r
+data(visium_mouse_brain_slices_sub, package = "scop")
+table(visium_mouse_brain_slices_sub$slice)
+Images(visium_mouse_brain_slices_sub)
+```
+
+![Two real mouse-brain Visium slices before integration.](assets/figures/real-data/spatial-mouse-brain-slices.png){fig-alt="Two panels show 1,000 sampled spots from each of two sagittal anterior mouse-brain Visium slices."}
+
+Do QC and spatial-feature discovery per slide, preserve `sample_id` and coordinate systems, and only then consider `RunSpatialIntegration()`. Integration across slides must not erase a biological region or condition that is confounded with slide.
+
+::: {.boundary}
+Visium spots are mixtures. Moran features and neighbourhoods support spatial-pattern claims; they do not prove cell-resolved identity, interaction, or causality.
+:::
