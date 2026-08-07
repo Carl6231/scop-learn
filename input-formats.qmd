@@ -19,6 +19,10 @@ You will learn to:
 7. produce one format-independent object audit and checkpoint.
 :::
 
+## Biological question
+
+Can the source representation be converted into an auditable sparse Seurat object without losing raw counts, feature and cell identifiers, sample design, or modality? The answer is established by the post-import audit and saved checkpoint—not by a reader completing without an error.
+
 ## 1 · Choose the reader from the evidence on disk
 
 | What you have | Reader | Expected object | Stop before analysis when |

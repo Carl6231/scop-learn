@@ -122,7 +122,12 @@ jobs:
               assert sha256(item["path"]) == item["sha256"], name
               assert item["plot_function"], name
               assert item["dataset"], name
-              assert item["source_checkpoint"], name
+              source = item["source_checkpoint"]
+              assert all(source.get(field) for field in ("path", "sha256", "bytes", "rebuild_script")), name
+              if Path(source["path"]).is_file():
+                  assert sha256(source["path"]) == source["sha256"], name
+              else:
+                  assert source["path"].startswith("artifacts/real-data/checkpoints/"), name
               assert all(plotter.startswith("scop::") for plotter in item["plot_function"].split(" + ")), name
 
           inputs = json.loads(Path("evidence/real-data/input-formats.json").read_text())

@@ -19,6 +19,10 @@ description: "使用真实 PBMC multiome 数据，详细讲解 SCOP marker heatm
 7. 建立含 unresolved labels 的可审计 consensus table。
 :::
 
+## 生物学问题
+
+哪些细胞身份同时得到正向 marker programme、矛盾证据、reference coverage、prediction confidence 与 tissue context 支持？若这些证据冲突，或目标粒度超过数据分辨率，标签必须保留为 unresolved。
+
 ## 1 · 审计 query 并预先决定注释粒度
 
 ::: {.input-contract}
@@ -218,6 +222,7 @@ srt <- RunSingleR(
 ## 7 · 理解 multiome 的 `RunLabelTransfer()`
 
 ```r
+set.seed(20260807)
 atac_query <- RunLabelTransfer(
   srt = atac_query,
   reference = rna_reference,
@@ -229,8 +234,7 @@ atac_query <- RunLabelTransfer(
   reference_label = "cell_type",
   add_gene_activity = TRUE,
   evaluate = TRUE,
-  truth_col = "CellType",
-  seed = 20260807
+  truth_col = "CellType"
 )
 ```
 

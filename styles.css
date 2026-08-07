@@ -43,8 +43,12 @@ figcaption { color: #394b61; }
 .chapter-nav { display: flex; flex-wrap: wrap; gap: 0.55rem; margin: 1rem 0 2rem; }
 .chapter-nav a { padding: 0.45rem 0.7rem; border: 1px solid #cbd7e4; border-radius: 999px; background: #fff; text-decoration: none; }
 .callout-note, .callout-warning, .callout-important { border-radius: 0.75rem; }
+div.sourceCode, pre.sourceCode { max-width: 100%; overflow-x: auto; }
 pre.sourceCode { border: 1px solid #dce4ec; border-radius: 0.75rem; }
-table { background: #fff; }
+main.content { min-width: 0; }
+main h1, main h2, main h3 { overflow-wrap: anywhere; word-break: break-word; }
+main :not(pre) > code { white-space: normal; overflow-wrap: anywhere; word-break: break-word; }
+main table { display: block; width: 100%; max-width: 100%; overflow-x: auto; background: #fff; -webkit-overflow-scrolling: touch; }
 img { border-radius: 0.75rem; }
 
 @media (max-width: 700px) {

@@ -18,6 +18,10 @@ You will learn to:
 6. connect advanced modules into one paper story instead of a collection of unrelated figures.
 :::
 
+## Biological question
+
+Which prespecified biological question is identifiable from the available experimental unit, replication, object fields, and installed backend? An advanced module is retained only when its input contract, complete result table, sensitivity check, SCOP plot, and stopping rule all exist.
+
 ## 1 · Lock the question and independent unit
 
 ::: {.input-contract}
@@ -46,6 +50,7 @@ Use this decision table before calling a function:
 | Which metabolic programmes differ? | cells/samples with adequate gene coverage | relative pathway score | `RunMetabolism()` → `MetabolismPlot()` |
 | Which cells show CNV-like expression? | tumour cells plus valid normal reference | expression-derived CNV pattern | `RunCNV()` → `CNVPlot()` |
 | Which single cells associate with a bulk phenotype? | matched bulk cohort with phenotype | Scissor+/Scissor− candidates | `RunScissor()` → `ScissorPlot()` |
+| Which populations respond most strongly, or what does an in-silico knockout predict? | replicated perturbation labels or a justified network | response-priority / virtual-knockout hypothesis | `RunAugur()` or `RunscTenifoldKnk()` → `scTenifoldKnkPlot()` |
 
 ## 2 · Executed pseudobulk differential expression
 
@@ -403,7 +408,118 @@ ScissorPlot(
 
 Bulk samples, phenotype values, feature identifiers, direction, and covariates must be aligned before fitting. Association with a bulk phenotype does not establish that the selected cells cause the phenotype.
 
-## 9 · Build one coherent paper story
+## 9 · Perturbation response and virtual knockout
+
+`RunAugur()` ranks cell populations by how separable two perturbation/condition labels are. It does not replace sample-level effect estimation:
+
+```r
+srt <- RunAugur(
+  srt,
+  celltype.by = "annotation_final",
+  label.by = "perturbation",
+  assay = "RNA",
+  layer = "counts",
+  backend = "cpp",
+  n_subsamples = 50,
+  subsample_size = 20,
+  folds = 3,
+  classifier = "rf",
+  cores = 4
+)
+```
+
+For a network-based **in-silico** knockout hypothesis, SCOP exports:
+
+```r
+srt <- RunscTenifoldKnk(
+  srt,
+  gKO = "STAT3",
+  assay = "RNA",
+  layer = "counts",
+  backend = "cpp",
+  cores = 4,
+  tool_name = "STAT3_virtual_KO"
+)
+
+scTenifoldKnkPlot(
+  srt,
+  tool_name = "STAT3_virtual_KO",
+  plot_type = "effect",
+  top_n = 20,
+  FDR_threshold = 0.05
+)
+```
+
+Augur scores are predictive separability, not effect size or causality. A virtual knockout is a network-model prediction, not a CRISPR experiment. Require biological replication, guide/perturbation QC for real perturb-seq, and experimental validation before a causal statement.
+
+## 10 · Validate a single-cell result in spatial data
+
+Spatial validation is justified only when the single-cell and spatial materials have compatible species, tissue, condition, anatomical context, feature identifiers, and coordinate quality. A matching gene pattern in one teaching slide is orthogonal support for localization—not patient-level replication and not proof that a spot contains only one cell type.
+
+::: {.input-contract}
+**Input contract for spatial validation**
+
+- a spatial Seurat object with raw or normalized `Spatial` assay layers;
+- declared coordinate columns and image/section identity;
+- a prespecified single-cell signature or candidate gene, not a post-hoc search over every result;
+- matching species and resolvable feature identifiers;
+- compatible tissue and condition, or an explicit statement that the comparison is exploratory;
+- a cell reference with reviewed labels if deconvolution is requested.
+:::
+
+Test whether the prespecified candidate is spatially structured with SCOP:
+
+```r
+spatial_srt <- RunSpatialVariableFeatures(
+  spatial_srt,
+  assay = "Spatial",
+  layer = "data",
+  features = candidate_genes,
+  method = "moran",
+  image = "slice1",
+  coord.cols = c("x", "y"),
+  nperm = 999,
+  seed = 20260807,
+  coordinate_space = "raw"
+)
+
+SpatialVariableFeaturePlot(
+  spatial_srt,
+  plot_type = "surface",
+  features = candidate_genes,
+  assay = "Spatial",
+  layer = "data",
+  image = "slice1",
+  coord.cols = c("x", "y"),
+  flip.y = FALSE,
+  combine = TRUE
+)
+```
+
+If the scientific question concerns cell-type composition rather than spot expression, deconvolution is a different evidence level:
+
+```r
+spatial_srt <- RunRCTD(
+  spatial_srt,
+  reference = reference_srt,
+  reference_label = "annotation_final",
+  assay = "Spatial",
+  reference_assay = "RNA",
+  layer = "counts",
+  reference_layer = "counts",
+  image = "slice1",
+  coord.cols = c("x", "y"),
+  rctd_mode = "full",
+  max_cores = 4,
+  min_cells = 25,
+  coordinate_space = "raw",
+  tool_name = "RCTD"
+)
+```
+
+`RunSpatialVariableFeatures()` and its SCOP plotter were executed on the real human PanIN object in the [spatial chapter](spatial-case.qmd). `RunRCTD()` was version-checked but not executed because the audited runtime lacked `spacexr`; never replace that missing result with a mock plot. Stop validation when tissue or condition is incompatible, coordinates fail QC, the candidate is absent, the pattern is driven by depth/edge artefacts, or the optional backend is unavailable.
+
+## 11 · Build one coherent paper story
 
 A defensible chain is usually:
 
@@ -418,6 +534,7 @@ For every arrow, write the evidence that authorizes the next step:
 | enrichment → mechanism | coherent leading-edge genes | term driven by artefact/redundancy |
 | mechanism → communication/regulation | matching cell state and prerequisites | missing backend/reference or contradictory biology |
 | single-cell → spatial validation | compatible tissue/condition and coordinate QC | datasets are not comparable |
+| perturbation prediction → causal claim | replicated perturbation and experimental validation | only classifier/network prediction exists |
 
 ::: {.checkpoint}
 **Checkpoint 2 — advanced-analysis bundle**

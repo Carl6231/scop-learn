@@ -40,6 +40,15 @@ save_checkpoint <- function(object, name) {
   saveRDS(object, path, compress = "gzip")
   list(path = path, sha256 = sha256(path), bytes = unname(file.info(path)$size))
 }
+checkpoint_reference <- function(path) {
+  if (!file.exists(path)) stop("Figure source checkpoint does not exist: ", path)
+  list(
+    path = path,
+    sha256 = sha256(path),
+    bytes = unname(file.info(path)$size),
+    rebuild_script = "scripts/build-real-evidence.R"
+  )
+}
 as_named_counts <- function(x) as.list(stats::setNames(as.integer(table(x)), names(table(x))))
 
 theme_learn <- function() {
@@ -313,6 +322,7 @@ pbmc <- FindVariableFeatures(pbmc, nfeatures = 1500, verbose = FALSE)
 pbmc <- ScaleData(pbmc, features = VariableFeatures(pbmc), verbose = FALSE)
 pbmc <- RunPCA(pbmc, npcs = 20, verbose = FALSE)
 pbmc <- RunUMAP(pbmc, dims = 1:15, seed.use = seed, verbose = FALSE)
+annotation_checkpoint <- save_checkpoint(pbmc, "annotation-pbmc")
 marker_panel <- intersect(c("MS4A1", "CD79A", "CD3D", "IL7R", "CD8A", "NKG7", "GNLY", "LYZ", "S100A8", "FCGR3A", "FCER1A"), rownames(pbmc))
 annotation_heatmap <- GroupHeatmap(
   pbmc, features = marker_panel, group.by = "CellType", assay = "RNA", layer = "data",
@@ -322,7 +332,7 @@ annotation_heatmap <- GroupHeatmap(
 )
 annotation_file <- save_plot(
   annotation_heatmap$plot, "annotation-marker-evidence", "scop::GroupHeatmap",
-  "pbmcmultiome_sub", "runtime-loaded normalized object", width = 10, height = 6
+  "pbmcmultiome_sub", annotation_checkpoint$path, width = 10, height = 6
 )
 
 set.seed(seed)
@@ -390,7 +400,7 @@ volcano <- VolcanoPlot(
 ) + ggtitle("SCOP VolcanoPlot · paired pseudobulk alpha–beta contrast")
 volcano_file <- save_plot(
   volcano, "advanced-pseudobulk", "scop::VolcanoPlot", "panc8_sub",
-  "edgeR dataset-by-celltype pseudobulk table", width = 9, height = 6
+  "evidence/real-data/pseudobulk-alpha-vs-beta.csv", width = 9, height = 6
 )
 
 annotation_manifest <- list(
@@ -399,6 +409,7 @@ annotation_manifest <- list(
   label_transfer = transfer_status, celltypist = celltypist_status,
   scop_RunLabelTransfer_scope = "RunLabelTransfer is intended for a ChromatinAssay/multiome transfer path; generic RNA-to-RNA transfer is shown with Seurat anchors.",
   singler = list(executed = FALSE, reason = "SingleR and celldex are not installed in the audited runtime."),
+  checkpoint = annotation_checkpoint,
   rule = "Automated labels are hypotheses; marker coherence, cluster context, dataset biology and uncertainty must be reviewed together."
 )
 write_json(annotation_manifest, "annotation")
@@ -457,6 +468,7 @@ neighborhood_file <- save_plot(
 
 data(visium_mouse_brain_slices_sub, package = "scop")
 brain <- visium_mouse_brain_slices_sub
+brain_checkpoint <- save_checkpoint(brain, "spatial-mouse-brain-slices")
 brain_slice1 <- SpatialSpotPlot(
   brain, group.by = "region", image = "anterior1", cells = Cells(brain[["anterior1"]]),
   overlay_image = FALSE, pt.size = 0.9, verbose = FALSE
@@ -469,7 +481,7 @@ brain_plot <- (brain_slice1 | brain_slice2) +
   plot_annotation(title = "SCOP SpatialSpotPlot · two real brain slices")
 brain_file <- save_plot(
   brain_plot, "spatial-mouse-brain-slices", "scop::SpatialSpotPlot",
-  "visium_mouse_brain_slices_sub", "runtime-loaded two-image object",
+  "visium_mouse_brain_slices_sub", brain_checkpoint$path,
   width = 11, height = 5.5
 )
 spatial_checkpoint <- save_checkpoint(spatial, "spatial-human-pancreas")
@@ -484,6 +496,7 @@ spatial_manifest <- list(
     mouse_brain = list(path = brain_file, sha256 = sha256(brain_file), plot_function = "scop::SpatialSpotPlot")
   ),
   checkpoint = spatial_checkpoint,
+  mouse_brain_checkpoint = brain_checkpoint,
   deconvolution = list(executed = FALSE, method = "RunRCTD", reason = "spacexr is not installed in the audited runtime; no deconvolution result is fabricated."),
   claim_boundary = "Visium spots are mixtures. Domain and Moran results are spot-level spatial patterns, not cell-resolved identities."
 )
@@ -497,9 +510,13 @@ manifest <- list(
   components = stats::setNames(lapply(component_files, function(x) list(path = json_path(x), sha256 = sha256(json_path(x)))), component_files),
   figures = stats::setNames(lapply(figures, function(x) {
     provenance <- figure_registry[[basename(x)]]
-    c(
-      list(path = x, sha256 = sha256(x), bytes = unname(file.info(x)$size)),
-      provenance[c("plot_function", "dataset", "source_checkpoint")]
+    list(
+      path = x,
+      sha256 = sha256(x),
+      bytes = unname(file.info(x)$size),
+      plot_function = provenance$plot_function,
+      dataset = provenance$dataset,
+      source_checkpoint = checkpoint_reference(provenance$source_checkpoint)
     )
   }), basename(figures)),
   critical_assertions = list(

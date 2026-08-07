@@ -169,6 +169,15 @@ Runner outputs are typically stored in an assay, metadata, or `srt@tools` under 
 
 Neither runner establishes clinical malignancy or causality. Require orthogonal validation and preserve the full reference/phenotype design.
 
+### Perturbation and virtual knockout
+
+| Task | Runner | Plotter | Boundary |
+|---|---|---|---|
+| prioritize responding cell types | `RunAugur()` | stored Augur result / task-appropriate SCOP display | classifier separability, not effect size |
+| in-silico gene knockout | `RunscTenifoldKnk()` | `scTenifoldKnkPlot()` | network prediction, not experimental knockout |
+
+Real perturbation studies still need guide assignment, perturbation efficiency, off-target review, independent samples, and an appropriate sample-level model.
+
 ## 10 · Spatial transcriptomics
 
 | Task | Runner | SCOP plotter | Essential input | Lesson |
