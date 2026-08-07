@@ -72,7 +72,8 @@ jobs:
                   canonical = base + ("zh/" if language == "zh" else "") + route
               text = path.read_text(encoding="utf-8")
               assert len(re.findall(r"<title>.*?</title>", text, re.S)) == 1, rel
-              assert len(re.findall(r'<meta name="description"', text)) == 1, rel
+              description_tags = re.findall(r'<meta name="description"[^>]*>', text)
+              assert len(description_tags) == 1, (rel, description_tags)
               assert re.findall(r'<link rel="canonical" href="([^"]+)"', text) == [canonical], rel
               expected_en = base + ("" if route == "index.html" else route)
               expected_zh = base + "zh/" + ("" if route == "index.html" else route)
