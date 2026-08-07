@@ -75,8 +75,12 @@ summary(srt$celltypist_conf_score)
 ## SingleR
 
 ```r
-# 需要 SingleR 和生物学合适的参考，常来自 celldex
-srt <- RunSingleR(srt, reference = reference_object, label = "label.main")
+# 需要 SingleR 和带标签、且生物学合适的 Seurat 参考
+srt <- RunSingleR(
+  srt_query = srt,
+  srt_ref = reference_object,
+  ref_group = "label.main"
+)
 ```
 
 审计运行时未安装 `SingleR` 和 `celldex`，因此不宣称已有结果。安装成功也不等于参考选择正确。

@@ -75,8 +75,12 @@ The real run matched 5,361 genes and produced 19 fine immune labels with median 
 ## SingleR
 
 ```r
-# requires SingleR plus an appropriate reference, often from celldex
-srt <- RunSingleR(srt, reference = reference_object, label = "label.main")
+# requires SingleR plus a labelled Seurat reference
+srt <- RunSingleR(
+  srt_query = srt,
+  srt_ref = reference_object,
+  ref_group = "label.main"
+)
 ```
 
 `SingleR` and `celldex` were absent from the audited runtime; no result is claimed here. Installing a package is not the same as selecting a biologically appropriate reference.
