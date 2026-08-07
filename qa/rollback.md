@@ -18,10 +18,13 @@ Rollback policy for `Carl6231/scop-learn`:
 - Production browser checks: root/Chinese route headings, stamped commit, search, and 390px overflow checks passed.
 - The first queued dispatch (`31127536198`) failed before a job was assigned; it was superseded by the successful run above. A duplicate dispatch (`31127737189`) was cancelled after the successful deployment and did not alter production.
 
-## Current production record
+## 2026-08-07 real-data curriculum release
 
-- Current deployed commit: `edfdf6a2bf55a2532612eba4857feb44493e1f67`
-- Successful quality workflow run: `31129178994` ([run](https://github.com/Carl6231/scop-learn/actions/runs/31129178994))
-- Successful Pages workflow run: `31129202917` ([run](https://github.com/Carl6231/scop-learn/actions/runs/31129202917))
-- Successful Pages deployment: `5785562372` (environment `github-pages`, ref `main`)
-- Production verification: root, `/zh/`, and `404.html` returned HTTP 200; canonical/alternate metadata, PNG social card, favicon, search, stamped commit, keyboard skip link, 390px overflow, no-JavaScript content, and axe-core home audits passed.
+- Known-good curriculum commit: `347507fccec663471876fd46546d0911ed400bd6`
+- Previous known-good production commit: `2dc1cb0112d3b72b6c2e6a93776c419abe372f31`
+- Successful quality workflow run: `31200383891` ([run](https://github.com/Carl6231/scop-learn/actions/runs/31200383891))
+- Successful Pages workflow run: `31200384397` ([run](https://github.com/Carl6231/scop-learn/actions/runs/31200384397))
+- Successful Pages deployment: `5798719985` (environment `github-pages`, ref `main`)
+- Production verification: all 8 real-data PNGs, `search.json`, `sitemap.xml`, `robots.txt`, `404.html`, the English root, and the Chinese root returned HTTP 200. The deployed pages exposed the stamped curriculum commit; desktop, 390px mobile, and JavaScript-disabled content checks passed.
+
+If this curriculum release must be rolled back, open a pull request that reverts commit `347507fccec663471876fd46546d0911ed400bd6`. Do not force-push or reset protected `main`. After the revert is merged, require a successful quality run and Pages deployment, then repeat the verification list above. Later documentation-only commits may change the footer build stamp without changing this curriculum baseline; the Pages workflow and public footer remain authoritative for the currently deployed source commit.
