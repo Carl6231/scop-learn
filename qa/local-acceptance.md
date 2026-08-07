@@ -1,31 +1,30 @@
-# Local acceptance record
+# Real-data release acceptance record
 
-Status: PASS for the locally rendered teaching-site candidate
+Status: PASS for curriculum release `347507fccec663471876fd46546d0911ed400bd6`
 
-Environment:
+Runtime and evidence build:
 
-- Quarto 1.10.18
+- Quarto 1.10.18 in GitHub Actions
 - R 4.5.1
 - SCOP 0.8.9
-- Google Chrome 150.0.7871.189 for browser checks
+- Seurat 5.5.0
 - axe-core 4.12.1
+- deterministic seed `20260807`
 
 Checks completed on 2026-08-07:
 
-- `Rscript scripts/single-cell-case.R`: PASS; 80 cells, 120 genes, 2 clusters, PCA and UMAP reductions.
-- `Rscript scripts/spatial-case.R`: PASS; 36 spots, 60 genes, 81 KNN edges, ranked spatial features.
-- `quarto render`: PASS; 18 English/Chinese routes.
-- Internal route and anchor check: PASS; zero broken internal links.
-- Search index check: PASS; English and Chinese content present in `search.json`.
-- Leakage scan: PASS; no local paths, tokens, localhost values, or sample identifiers in the rendered site.
-- Browser check: PASS; desktop, 390px mobile, search, reciprocal language links, one homepage H1, image alt text, and no horizontal overflow.
-- axe checks: PASS; 0 violations on English and Chinese home routes.
-- Metadata and publishing assets: PASS; every rendered route has one canonical URL, one description, reciprocal `en`/`zh-Hans`/`x-default` alternates, one PNG social preview, and a favicon; `robots.txt` and `sitemap.xml` are present.
-- Accessibility behavior: PASS; the keyboard skip link moves focus to the document landmark, focus-visible styling is present, reduced-motion mode changes scrolling to `auto`, and 720px/360px viewport checks have no horizontal overflow.
-- No-JavaScript resilience: PASS; a JavaScript-disabled browser still exposes the page title, homepage H1, and core text.
-- Performance budget: PASS; local browser measurements stayed below the 10-second document-load and 2 MB transfer thresholds.
-- Link and structure checks: PASS; 18 HTML routes, relative links, anchors, main/nav landmarks, and image alt text passed the CI-equivalent scanner. `axe-core` 4.12.1 reports zero violations on English and Chinese home routes.
+- Real-data evidence: PASS; 5 SCOP-bundled datasets plus the public 10x PBMC 1k v3 H5 were used, 8 published figures were generated and inspected, and every component and figure hash matched `evidence/real-data/manifest.json`.
+- Input round trip: PASS; 10x H5, 10x three-file, and RDS dimensions and total UMI counts agreed.
+- Executed workflow spine: PASS; single-sample QC and doublet detection, Seurat v5 layer joining, cluster-tree and dimension selection, SCT plus Harmony cross-source integration, marker and reference-based annotation, CellTypist, edgeR pseudobulk, and spatial QC/feature/network/neighbourhood analyses all produced recorded results.
+- Honest execution states: PASS; unavailable H5AD/Loom conversion backends, SingleR, RCTD, and unsupported biological claims remain explicitly marked as not executed or not established.
+- Quarto render: PASS; 30 English/Chinese HTML routes rendered in quality run [`31200383891`](https://github.com/Carl6231/scop-learn/actions/runs/31200383891).
+- Link and structure checks: PASS; 30 routes, internal links, anchors, main/nav landmarks, image alt text, and 64 HTTPS links passed.
+- Metadata and publishing assets: PASS; canonical URLs, reciprocal `en`/`zh-Hans`/`x-default` alternates, descriptions, social preview, favicon, `robots.txt`, and `sitemap.xml` passed.
+- Leakage scan: PASS; no local paths, tokens, localhost values, or sample identifiers were found in the rendered site.
+- Accessibility automation: PASS; axe-core reported 0 violations on the English and Chinese home routes. Automated coverage is supplemented by manual visual inspection.
+- Production assets: PASS; all 8 real-data PNGs, `search.json`, `sitemap.xml`, `robots.txt`, and `404.html` returned HTTP 200.
+- Responsive production view: PASS; the public English home page was visually inspected at a 390 × 844 CSS-pixel viewport, with the hero, evidence counters, curriculum cards, result figure, boundary notice, and footer readable in a single-column layout.
+- No-JavaScript resilience: PASS; JavaScript-disabled production HTML still exposed the page H1, core curriculum description, and stamped commit.
+- Build identity: PASS; the public English and Chinese pages exposed commit `347507fccec663471876fd46546d0911ed400bd6`, and Pages deployment `5798719985` completed successfully.
 
-The two PNG outputs and JSON evidence manifests are the actual inspected case artifacts. Optional `SpatialQM` is explicitly recorded as unavailable in this environment and is not claimed as executed.
-
-Production re-check after Pages deployment: root, `/zh/`, and `404.html` returned HTTP 200; both language titles, search, stamped commit, and 390px mobile overflow checks passed.
+Claim boundary: this acceptance record validates a reproducible teaching workflow and its named outputs. It does not turn technical dataset sources into patient replicates, establish new biological discoveries, or claim execution for missing optional backends.
